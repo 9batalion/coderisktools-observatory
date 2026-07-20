@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coderisktools.org/schemas/scan-result.schema.json",
+  "title": "Observatory ScanResult",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["scanner_id", "scanner_version", "ruleset_digest", "target_sha", "status", "findings", "errors", "warnings"],
+  "properties": {
+    "scanner_id": {"type": "string", "minLength": 1},
+    "scanner_version": {"type": "string", "minLength": 1},
+    "ruleset_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "target_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "status": {"enum": ["complete", "partial", "failed"]},
+    "findings": {"type": "array"},
+    "errors": {"type": "array"},
+    "warnings": {"type": "array"}
+  }
+}

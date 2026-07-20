@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coderisktools.org/schemas/normalized-finding.schema.json",
+  "title": "Observatory NormalizedFinding",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["finding_id", "rule_id", "category", "severity", "confidence", "visibility", "evidence_refs", "location", "summary", "remediation", "source_scanners"],
+  "properties": {
+    "finding_id": {"type": "string", "minLength": 1},
+    "rule_id": {"type": "string", "minLength": 1},
+    "category": {"type": "string", "minLength": 1},
+    "severity": {"enum": ["informational", "low", "medium", "high", "critical"]},
+    "confidence": {"enum": ["low", "medium", "high", "confirmed"]},
+    "visibility": {"enum": ["PUBLIC_SUMMARY", "MAINTAINER_ONLY", "EMBARGOED", "REDACTED", "REJECTED"]},
+    "evidence_refs": {"type": "array", "items": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}},
+    "location": {"type": "object", "required": ["commit"], "properties": {"path": {"type": "string"}, "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"}}, "additionalProperties": false},
+    "summary": {"type": "string", "minLength": 1},
+    "remediation": {"type": "string", "minLength": 1},
+    "source_scanners": {"type": "array", "items": {"type": "string"}}
+  }
+}

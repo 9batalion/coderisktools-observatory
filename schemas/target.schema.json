@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coderisktools.org/schemas/target.schema.json",
+  "title": "Observatory Target",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["target_id", "repository_url", "requested_ref", "resolved_sha", "source", "selection_reason", "license_status", "execution_allowed", "publication_mode", "status"],
+  "properties": {
+    "target_id": {"type": "string", "minLength": 1},
+    "repository_url": {"type": "string", "pattern": "^https://github\\.com/[^/]+/[^/]+/?$"},
+    "requested_ref": {"type": "string", "minLength": 1},
+    "resolved_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "source": {"type": "string", "minLength": 1},
+    "selection_reason": {"type": "string", "minLength": 1},
+    "license_status": {"enum": ["recognized", "unknown", "restricted"]},
+    "execution_allowed": {"const": false},
+    "publication_mode": {"enum": ["public-summary", "maintainer-only", "embargoed", "redacted"]},
+    "status": {"enum": ["candidate", "triaged", "ready", "acquired", "scanned", "rejected"]}
+  }
+}

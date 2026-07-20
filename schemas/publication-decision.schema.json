@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coderisktools.org/schemas/publication-decision.schema.json",
+  "title": "Observatory PublicationDecision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["decision", "reviewer", "reason_codes", "approved_artifacts", "full_findings_public"],
+  "properties": {
+    "decision": {"enum": ["PUBLISH", "HOLD", "REDACT", "REJECT"]},
+    "reviewer": {"type": "string", "minLength": 1},
+    "reason_codes": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "approved_artifacts": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "full_findings_public": {"type": "boolean"},
+    "override": {"type": "boolean"},
+    "override_reason": {"type": "string", "minLength": 1}
+  }
+}
