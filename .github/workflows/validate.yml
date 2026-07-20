@@ -24,8 +24,10 @@ jobs:
           import re
           for path in pathlib.Path('.github/workflows').glob('*.yml'):
               text = path.read_text()
-              for match in re.findall(r'uses:\s*([^\s#]+)', text):
-                  if '@' not in match or not re.fullmatch(r'.+@[0-9a-f]{40}', match):
-                      raise SystemExit(f'unpinned action: {match}')
+              for line in text.splitlines():
+                  if line.lstrip().startswith('- uses:'):
+                      match = line.split('uses:', 1)[1].split('#', 1)[0].strip()
+                      if not re.fullmatch(r'.+@[0-9a-f]{40}', match):
+                          raise SystemExit(f'unpinned action: {match}')
           print('action pins: PASS')
           PY
