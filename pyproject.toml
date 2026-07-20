@@ -1,0 +1,10 @@
+[build-system]
+requires = []
+build-backend = "backend"
+
+[project]
+name = "coderisktools-observatory"
+version = "0.1.0.dev0"
+description = "OSS-only reproducible repository risk observatory"
+requires-python = ">=3.11"
+dependencies = []

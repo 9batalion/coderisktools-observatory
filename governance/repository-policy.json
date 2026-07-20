@@ -1,0 +1,8 @@
+{
+  "schema_version": "1",
+  "project": "coderisktools-observatory",
+  "oss_only": true,
+  "manual_publication_gate": true,
+  "target_code_execution": false,
+  "publication_mode": "pull_request_only"
+}
