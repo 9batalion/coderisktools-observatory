@@ -1,0 +1,31 @@
+name: Validate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Run tests
+        run: python3 -m unittest discover -s tests -v
+      - name: Compile Python
+        run: python3 -m py_compile src/observatory/*.py tests/**/*.py
+      - name: Check action pins
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          import re
+          for path in pathlib.Path('.github/workflows').glob('*.yml'):
+              text = path.read_text()
+              for match in re.findall(r'uses:\s*([^\s#]+)', text):
+                  if '@' not in match or not re.fullmatch(r'.+@[0-9a-f]{40}', match):
+                      raise SystemExit(f'unpinned action: {match}')
+          print('action pins: PASS')
+          PY

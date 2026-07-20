@@ -1,0 +1,25 @@
+name: Request review
+
+description: Request a maintainer review of a public repository
+labels: [review-request]
+body:
+  - type: input
+    id: repository
+    attributes:
+      label: Repository URL
+      description: Public GitHub repository URL only.
+    validations:
+      required: true
+  - type: textarea
+    id: purpose
+    attributes:
+      label: Purpose and preferred publication scope
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety confirmation
+      options:
+        - label: I will not paste secrets or sensitive evidence into this issue.
+          required: true
