@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parents[1] / "src"))
 
-from observatory.benchmark import BenchmarkError, load_manifest, run_benchmark
+from observatory.benchmark import BenchmarkError, calculate_metrics, load_manifest, run_benchmark
 from observatory.contracts import ScanResult
 
 DIGEST = "sha256:" + "a" * 64
@@ -54,6 +54,24 @@ class BenchmarkTests(unittest.TestCase):
         self.assertEqual([item["decision"] for item in first], ["PUBLISH", "HOLD"])
         self.assertTrue(all(item["passed"] for item in first))
 
+    def test_calculate_metrics_and_quality_gate(self):
+        results = [
+            {"ground_truth": "negative", "finding_count": 0},
+            {"ground_truth": "positive", "finding_count": 1},
+            {"ground_truth": "negative", "finding_count": 1},
+            {"ground_truth": "positive", "finding_count": 0},
+        ]
+        metrics = calculate_metrics(results, {"min_precision": 0.4, "min_recall": 0.4, "min_f1": 0.4})
+        self.assertEqual(metrics["counts"], {"tp": 1, "tn": 1, "fp": 1, "fn": 1})
+        self.assertEqual(metrics["precision"], 0.5)
+        self.assertEqual(metrics["recall"], 0.5)
+        self.assertEqual(metrics["f1"], 0.5)
+        self.assertTrue(metrics["quality_passed"])
+
+    def test_calculate_metrics_fails_quality_threshold(self):
+        results = [{"ground_truth": "positive", "finding_count": 0}]
+        metrics = calculate_metrics(results, {"min_precision": 1.0, "min_recall": 1.0, "min_f1": 1.0})
+        self.assertFalse(metrics["quality_passed"])
     def test_run_benchmark_rejects_ruleset_digest_mismatch(self):
         class WrongDigestAdapter(FakeAdapter):
             def scan(self, target_path, target_sha):
