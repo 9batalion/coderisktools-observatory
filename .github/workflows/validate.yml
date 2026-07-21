@@ -13,6 +13,25 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Checkout pinned scanner source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: 9batalion/coderisktools-scanner
+          ref: 1c45de48edf1a36d3fda332ffa5e59da9fcd4631
+          path: .ci/coderisktools-scanner
+      - name: Install pinned scanner
+        run: |
+          python3 -m venv .ci/scanner-venv
+          .ci/scanner-venv/bin/python -m pip install --quiet --no-deps .ci/coderisktools-scanner
+      - name: Derive ruleset provenance
+        run: echo "RULESET_DIGEST=$(.ci/scanner-venv/bin/python scripts/ruleset_digest.py)" >> "$GITHUB_ENV"
+      - name: Move scanner runtime outside workspace
+        run: |
+          mv .ci/scanner-venv "$RUNNER_TEMP/scanner-venv"
+          mkdir -p "$RUNNER_TEMP/scanner-bin"
+          printf '%s\n' '#!/usr/bin/env bash' 'exec "$RUNNER_TEMP/scanner-venv/bin/python" -m src "$@"' > "$RUNNER_TEMP/scanner-bin/secret-scanner"
+          chmod 755 "$RUNNER_TEMP/scanner-bin/secret-scanner"
+          rm -rf .ci/coderisktools-scanner .ci
       - name: Run tests
         run: python3 -m unittest discover -s tests -v
       - name: Compile Python
@@ -29,6 +48,20 @@ jobs:
           assert all(case.get('ground_truth') in {'positive', 'negative'} for case in manifest['cases'])
           print(f"benchmark contract: PASS ({len(manifest['cases'])} cases)")
           PY
+      - name: Run real scanner benchmark
+        run: |
+          PATH="$RUNNER_TEMP/scanner-bin:$RUNNER_TEMP/scanner-venv/bin:$PATH" PYTHONPATH=src \
+            python3 -m observatory benchmark \
+            --manifest benchmark/manifest.json \
+            --ruleset-digest "$RULESET_DIGEST" \
+            --json
+      - name: Run real scanner self-scan
+        run: |
+          PATH="$RUNNER_TEMP/scanner-bin:$RUNNER_TEMP/scanner-venv/bin:$PATH" PYTHONPATH=src \
+            python3 -m observatory self-scan \
+            --path . \
+            --ruleset-digest "$RULESET_DIGEST" \
+            --json
       - name: Check action pins
         run: |
           python3 - <<'PY'
