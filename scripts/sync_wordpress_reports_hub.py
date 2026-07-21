@@ -66,11 +66,11 @@ def main() -> int:
 
     api_base = os.environ.get("WP_API_BASE_URL", "").rstrip("/")
     username = os.environ.get("WP_USERNAME", "")
-    credential = os.environ.get("WP_APP_CREDENTIAL", "")
-    if not api_base or not username or not credential:
-        raise SystemExit("WP_API_BASE_URL, WP_USERNAME and WP_APP_CREDENTIAL are required")
+    auth_value = os.environ.get("WP_APP_AUTH", "")
+    if not api_base or not username or not auth_value:
+        raise SystemExit("WP_API_BASE_URL, WP_USERNAME and WP_APP_AUTH are required")
     page_url = f"{api_base}/wp/v2/pages/{urllib.parse.quote(str(args.page_id))}?context=edit"
-    _, page = request(page_url, auth=(username, credential))
+    _, page = request(page_url, auth=(username, auth_value))
     raw = page.get("content", {}).get("raw")
     if not isinstance(raw, str) or raw.count(START) != 1 or raw.count(END) != 1:
         raise SystemExit("page must contain exactly one publication-hub marker pair")
@@ -80,10 +80,10 @@ def main() -> int:
     print(json.dumps({"page_id": page.get("id"), "latest_url": latest_url, "candidate_chars": len(candidate), "dry_run": args.dry_run}, sort_keys=True))
     if args.dry_run:
         return 0
-    status, updated = request(page_url, method="POST", payload=json.dumps({"content": candidate}).encode(), auth=(username, credential))
+    status, updated = request(page_url, method="POST", payload=json.dumps({"content": candidate}).encode(), auth=(username, auth_value))
     if status not in (200, 201):
         raise SystemExit(f"unexpected WordPress write status: {status}")
-    _, readback = request(page_url, auth=(username, credential))
+    _, readback = request(page_url, auth=(username, auth_value))
     if readback.get("content", {}).get("raw") != candidate:
         raise SystemExit("WordPress raw content readback mismatch")
     print(json.dumps({"write_status": status, "readback": "PASS", "page_id": updated.get("id")}, sort_keys=True))
