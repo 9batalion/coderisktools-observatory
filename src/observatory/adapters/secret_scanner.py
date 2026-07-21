@@ -51,6 +51,7 @@ class SecretScannerAdapter:
         return {"directory": True, "offline": True, "json": True, "target_execution": False}
 
     def scan(self, target_path, target_sha):
+        scanner_version: str = self.version()
         command = [
             *self.command,
             "scan", "--dir", str(target_path), "--recursive", "--format", "json",
@@ -79,7 +80,7 @@ class SecretScannerAdapter:
             raise AdapterError("secret scanner JSON has no findings array")
         if completed.returncode not in (0, 1):
             return ScanResult(
-                self.scanner_id, self.version(), self.ruleset_digest, target_sha,
+                self.scanner_id, scanner_version, self.ruleset_digest, target_sha,
                 "failed", [], [f"scanner_exit_{completed.returncode}"], [],
             )
         warnings = []
@@ -88,7 +89,7 @@ class SecretScannerAdapter:
             warnings.append("scanner_baseline_stale")
         return ScanResult(
             self.scanner_id,
-            self.version(),
+            scanner_version,
             self.ruleset_digest,
             target_sha,
             "complete",
