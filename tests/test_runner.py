@@ -19,6 +19,15 @@ class FakeAdapter:
         return ScanResult("fake-scanner", "1", DIGEST, target_sha, "complete", [], [], [])
 
 
+class FindingAdapter(FakeAdapter):
+    def scan(self, target_path, target_sha):
+        return ScanResult(
+            "fake-scanner", "1", DIGEST, target_sha, "complete",
+            [{"rule_id": "raw", "location": {"path": "config.env", "line": 1, "commit": target_sha}, "evidence": {"value": "raw-secret", "redacted": False}}],
+            [], [],
+        )
+
+
 def fixture_repo():
     root = Path(tempfile.mkdtemp())
     subprocess.run(["git", "init", "-q", str(root)], check=True)
@@ -40,6 +49,15 @@ class LocalRunnerTests(unittest.TestCase):
             self.assertEqual(result.scan.target_sha, sha)
             self.assertTrue((Path(output) / "manifest.json").exists())
             self.assertEqual(list(Path(work).iterdir()), [])
+
+    def test_pipeline_holds_on_normalization_failure(self):
+        source, sha = fixture_repo()
+        with tempfile.TemporaryDirectory() as work, tempfile.TemporaryDirectory() as output:
+            result = run_pipeline(source, sha, Path(work), Path(output), "https://github.com/owner/repo", "recognized", FindingAdapter(), "operator")
+            self.assertEqual(result.decision.decision, "HOLD")
+            self.assertEqual(result.scan.status, "failed")
+            self.assertEqual(result.findings, [])
+            self.assertTrue(any(error.startswith("normalization_failed:") for error in result.scan.errors))
 
     def test_cli_help_exposes_scan_and_offline_options(self):
         completed = subprocess.run([sys.executable, "-m", "observatory", "--help"], env={"PYTHONPATH": "src"}, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
