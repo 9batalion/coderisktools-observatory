@@ -24,6 +24,12 @@ class SecretScannerAdapterTests(unittest.TestCase):
         )
         return [sys.executable, str(path)]
 
+    def test_rejects_invalid_scanner_version(self):
+        command = self._fake({"findings": []})
+        Path(command[1]).write_text("import sys\nif '--version' in sys.argv:\n sys.stdout.write('scanner\\nversion\\n')\nelse:\n print('{}')\n")
+        with self.assertRaises(AdapterError):
+            SecretScannerAdapter(command, DIGEST).version()
+
     def test_rejects_non_hex_ruleset_digest(self):
         with self.assertRaises(AdapterError):
             SecretScannerAdapter(["secret-scanner"], "sha256:" + "g" * 64)
