@@ -1,6 +1,7 @@
 """Command-line interface for the local Observatory runner."""
 
 import argparse
+from dataclasses import asdict
 import json
 from pathlib import Path
 import shlex
@@ -8,7 +9,9 @@ import sys
 import tempfile
 
 from observatory.adapters.secret_scanner import SecretScannerAdapter
+from observatory.contracts import Target
 from observatory.reporting.runner import run_pipeline
+from observatory.target_registry import add_target
 from observatory.verification.bundle import verify_bundle
 
 
@@ -17,6 +20,16 @@ def build_parser():
     parser.add_argument("--offline", action="store_true", help="Reject network repository URLs")
     parser.add_argument("--verbose", action="store_true", help="Include diagnostic errors on stderr")
     subparsers = parser.add_subparsers(dest="command", required=True)
+    target = subparsers.add_parser("target", help="Manage the append-only target registry")
+    target_commands = target.add_subparsers(dest="target_command", required=True)
+    target_add = target_commands.add_parser("add", help="Record an exact-SHA target")
+    target_add.add_argument("--repository-url", required=True)
+    target_add.add_argument("--ref", required=True)
+    target_add.add_argument("--sha", required=True)
+    target_add.add_argument("--registry", type=Path, required=True)
+    target_add.add_argument("--license-status", choices=["recognized", "unknown", "restricted"], default="unknown")
+    target_add.add_argument("--publication-mode", choices=["public-summary", "maintainer-only", "embargoed", "redacted"], default="public-summary")
+    target_add.add_argument("--json", action="store_true")
     scan = subparsers.add_parser("scan", help="Acquire an exact SHA, scan it and build a report bundle")
     scan.add_argument("--source", required=True, help="Local repository path or HTTPS GitHub URL")
     scan.add_argument("--sha", required=True, help="Full 40-character lowercase commit SHA")
@@ -36,6 +49,31 @@ def build_parser():
 def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.command == "target":
+        if args.target_command != "add":
+            parser.error("unsupported target command")
+        try:
+            canonical_url = args.repository_url.rstrip("/")
+            target = Target.from_dict({
+                "target_id": canonical_url.removeprefix("https://github.com/").replace("/", "-"),
+                "repository_url": canonical_url,
+                "requested_ref": args.ref,
+                "resolved_sha": args.sha,
+                "source": "operator",
+                "selection_reason": "explicit exact SHA supplied by operator",
+                "license_status": args.license_status,
+                "execution_allowed": False,
+                "publication_mode": args.publication_mode,
+                "status": "candidate",
+            })
+            add_target(args.registry, target)
+        except Exception as exc:
+            if args.verbose:
+                print(f"observatory: {exc}", file=sys.stderr)
+            return 3
+        payload = asdict(target)
+        print(json.dumps(payload, sort_keys=True) if args.json else f"ADDED: {target.target_id}@{target.resolved_sha}")
+        return 0
     if args.command == "verify":
         result = verify_bundle(args.bundle)
         payload = {"valid": result.valid, "errors": result.errors, "checked_files": result.checked_files}
