@@ -55,7 +55,28 @@ class BundleVerificationTests(unittest.TestCase):
             (Path(directory) / "report.md").write_text("tampered\n")
             result = verify_bundle(Path(directory))
         self.assertFalse(result.valid)
-        self.assertTrue(any("hash" in error for error in result.errors))
+        self.assertTrue(any("hash" in error or "size mismatch" in error for error in result.errors))
+
+    def test_manifest_size_mismatch_fails_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            make_bundle(directory)
+            manifest_path = Path(directory) / "manifest.json"
+            manifest = json.loads(manifest_path.read_text())
+            manifest["artifacts"][0]["size"] += 1
+            manifest_path.write_text(json.dumps(manifest))
+            result = verify_bundle(Path(directory))
+        self.assertFalse(result.valid)
+        self.assertTrue(any("size mismatch" in error for error in result.errors))
+
+    def test_non_hex_checksum_fails_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            make_bundle(directory)
+            checksums_path = Path(directory) / "checksums.txt"
+            lines = checksums_path.read_text().splitlines()
+            checksums_path.write_text("g" * 64 + lines[0][64:] + "\n" + "\n".join(lines[1:]) + "\n")
+            result = verify_bundle(Path(directory))
+        self.assertFalse(result.valid)
+        self.assertTrue(any("invalid checksums entry" in error for error in result.errors))
 
     def test_schema_tampering_fails_closed(self):
         with tempfile.TemporaryDirectory() as directory:

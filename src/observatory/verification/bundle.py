@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import hashlib
 import json
 from pathlib import Path, PurePosixPath
+import re
 
 from observatory.verification.schema import SchemaValidationError, validate_json_file
 
@@ -90,8 +91,12 @@ def verify_bundle(root):
             errors.append(f"missing or unsafe artifact: {name}")
             continue
         expected = item.get("sha256")
-        if not isinstance(expected, str) or len(expected) != 64:
+        if not isinstance(expected, str) or not re.fullmatch(r"[0-9a-f]{64}", expected):
             errors.append(f"invalid hash metadata: {name}")
+            continue
+        declared_size = item.get("size")
+        if not isinstance(declared_size, int) or isinstance(declared_size, bool) or declared_size != path.stat().st_size:
+            errors.append(f"size mismatch: {name}")
             continue
         actual = _digest(path)
         checked.append(name)
@@ -107,7 +112,7 @@ def verify_bundle(root):
         return VerificationResult(False, [f"invalid checksums.txt: {exc}"], checked)
     for line in lines:
         parts = line.split("  ", 1)
-        if len(parts) != 2 or len(parts[0]) != 64 or not _safe_name(parts[1]):
+        if len(parts) != 2 or not re.fullmatch(r"[0-9a-f]{64}", parts[0]) or not _safe_name(parts[1]):
             errors.append("invalid checksums entry")
             continue
         digest, name = parts
