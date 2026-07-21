@@ -28,7 +28,8 @@ def make_bundle(root):
     (root / "report.json").write_text(json.dumps(report) + "\n")
     (root / "publication-decision.json").write_text(json.dumps(decision) + "\n")
     (root / "review-record.json").write_text(json.dumps(review) + "\n")
-    for name in (set(REQUIRED) - {"report.json", "publication-decision.json", "review-record.json"}):
+    (root / "scan-summary.json").write_text(json.dumps({"target_sha": sha, "status": "complete", "finding_count": 0, "error_count": 0, "warning_count": 0}) + "\n")
+    for name in (set(REQUIRED) - {"report.json", "publication-decision.json", "review-record.json", "scan-summary.json"}):
         (root / name).write_text(name + "\n")
     entries = []
     for name in REQUIRED:
