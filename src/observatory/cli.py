@@ -16,6 +16,7 @@ from observatory.normalization.findings import normalize_scanner_findings
 from observatory.policy.engine import evaluate_publication
 from observatory.reporting.builder import ReportModel, build_report_bundle
 from observatory.reporting.runner import run_pipeline
+from observatory.self_scan import run_self_scan
 from observatory.publishing.immutability import verify_immutability
 from observatory.publishing.pr import create_publication_pr, prepare_publication
 from observatory.publishing.retract import create_retraction_pr, prepare_retraction
@@ -108,6 +109,11 @@ def build_parser():
     benchmark.add_argument("--license-status", choices=["recognized", "unknown", "restricted"], default="recognized")
     benchmark.add_argument("--scanner-command", default="secret-scanner")
     benchmark.add_argument("--json", action="store_true")
+    self_scan = subparsers.add_parser("self-scan", help="Scan the Observatory source tree without raw evidence output")
+    self_scan.add_argument("--path", type=Path, default=Path("."))
+    self_scan.add_argument("--ruleset-digest", required=True)
+    self_scan.add_argument("--scanner-command", default="secret-scanner")
+    self_scan.add_argument("--json", action="store_true")
     verify = subparsers.add_parser("verify", help="Verify report manifest, hashes and bundle paths")
     verify.add_argument("bundle", type=Path, help="Report bundle directory")
     verify.add_argument("--json", action="store_true", help="Print machine-readable verification result")
@@ -300,6 +306,16 @@ def main(argv=None):
         payload = asdict(target)
         print(json.dumps(payload, sort_keys=True) if args.json else f"ADDED: {target.target_id}@{target.resolved_sha}")
         return 0
+    if args.command == "self-scan":
+        try:
+            adapter = SecretScannerAdapter(shlex.split(args.scanner_command), args.ruleset_digest)
+            payload = run_self_scan(args.path, adapter, args.ruleset_digest)
+        except Exception as exc:
+            if args.verbose:
+                print(f"observatory: self-scan failed: {type(exc).__name__}", file=sys.stderr)
+            return 3
+        print(json.dumps(payload, ensure_ascii=False, sort_keys=True) if args.json else f"{payload['decision']}: {payload['finding_count']} findings")
+        return 0 if payload["decision"] == "PUBLISH" else 2
     if args.command == "benchmark":
         try:
             adapter = SecretScannerAdapter(shlex.split(args.scanner_command), args.ruleset_digest)

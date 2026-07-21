@@ -40,6 +40,19 @@ PYTHONPATH=src python3 -m observatory benchmark \
 
 Exit codes are `0` when every case matches, `2` when a case mismatches, and `3` for an invalid manifest or runtime error. The positive fixture is assembled only in a temporary directory from split parts; raw secret material is not stored in the repository. The benchmark output contains statuses, counts, decisions and reason codes, never raw evidence.
 
+## Self-scan
+
+Scan the Observatory checkout at its exact Git `HEAD` without printing raw findings:
+
+```bash
+PYTHONPATH=src python3 -m observatory self-scan \
+  --path . \
+  --ruleset-digest sha256:<64 lowercase hex characters> \
+  --json
+```
+
+A clean self-scan returns exit `0`. Findings or scan errors return `2`; missing Git provenance, invalid configuration or scanner runtime errors return `3`. The output contains only provenance, status, counts, decisions, reason codes, errors and warnings.
+
 ## Local development
 
 ```bash

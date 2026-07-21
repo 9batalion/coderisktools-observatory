@@ -63,6 +63,7 @@ class LocalRunnerTests(unittest.TestCase):
         completed = subprocess.run([sys.executable, "-m", "observatory", "--help"], env={"PYTHONPATH": "src"}, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
         self.assertIn("scan", completed.stdout)
         self.assertIn("benchmark", completed.stdout)
+        self.assertIn("self-scan", completed.stdout)
         self.assertIn("--offline", completed.stdout)
 
 
