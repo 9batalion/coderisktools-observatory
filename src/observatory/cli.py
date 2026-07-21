@@ -15,6 +15,7 @@ from observatory.normalization.findings import normalize_scanner_findings
 from observatory.policy.engine import evaluate_publication
 from observatory.reporting.builder import ReportModel, build_report_bundle
 from observatory.reporting.runner import run_pipeline
+from observatory.publishing.pr import prepare_publication
 from observatory.target_registry import add_target
 from observatory.verification.bundle import verify_bundle
 
@@ -47,6 +48,10 @@ def build_parser():
     report.add_argument("--repository-name", required=True)
     report.add_argument("--output-dir", type=Path, required=True)
     report.add_argument("--limitation", action="append", default=[])
+    publish = subparsers.add_parser("publish-pr", help="Stage a verified PUBLISH bundle for a reports PR")
+    publish.add_argument("--bundle", type=Path, required=True)
+    publish.add_argument("--reports-repo", type=Path, required=True)
+    publish.add_argument("--revision", type=int, default=1)
     target = subparsers.add_parser("target", help="Manage the append-only target registry")
     target_commands = target.add_subparsers(dest="target_command", required=True)
     target_add = target_commands.add_parser("add", help="Record an exact-SHA target")
@@ -76,6 +81,23 @@ def build_parser():
 def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.command == "publish-pr":
+        try:
+            plan = prepare_publication(args.reports_repo, args.bundle, args.revision)
+        except Exception as exc:
+            if args.verbose:
+                print(f"observatory: publication staging failed: {type(exc).__name__}", file=sys.stderr)
+            return 3
+        print(json.dumps({
+            "staged": True,
+            "destination": str(plan.destination),
+            "target_sha": plan.target_sha,
+            "repository_url": plan.repository_url,
+            "revision": plan.revision,
+            "artifacts": [path.name for path in plan.artifacts],
+            "next_step": "create a pull request from the reports repository branch",
+        }, sort_keys=True))
+        return 0
     if args.command == "report":
         try:
             inputs = (args.target, args.scan, args.findings, args.decision)
