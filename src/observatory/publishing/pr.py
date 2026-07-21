@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 import io
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import shutil
 import subprocess
 import tarfile
@@ -100,12 +100,25 @@ def _run_git(repo, *args):
     return subprocess.run(["git", *args], cwd=repo, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True).stdout.strip()
 
 
+def _extract_archive(data, snapshot):
+    with tarfile.open(fileobj=io.BytesIO(data), mode="r:") as archive:
+        for member in archive.getmembers():
+            path = PurePosixPath(member.name)
+            if path.is_absolute() or not path.parts or any(part in {"", ".", ".."} for part in path.parts):
+                raise ValueError("unsafe origin snapshot path")
+            if not (member.isdir() or member.isreg()):
+                raise ValueError("origin snapshot contains a non-regular entry")
+            destination = (snapshot / Path(*path.parts)).resolve()
+            if snapshot.resolve() not in destination.parents:
+                raise ValueError("origin snapshot path escapes extraction root")
+            archive.extract(member, snapshot)
+
+
 def _origin_snapshot(repo):
     result = subprocess.run(["git", "archive", "origin/main"], cwd=repo, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     snapshot = Path(tempfile.mkdtemp(prefix="observatory-origin-"))
     try:
-        with tarfile.open(fileobj=io.BytesIO(result.stdout), mode="r:") as archive:
-            archive.extractall(snapshot)
+        _extract_archive(result.stdout, snapshot)
     except Exception:
         shutil.rmtree(snapshot, ignore_errors=True)
         raise
