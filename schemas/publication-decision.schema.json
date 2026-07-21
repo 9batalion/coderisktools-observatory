@@ -12,6 +12,6 @@
     "approved_artifacts": {"type": "array", "items": {"type": "string", "minLength": 1}},
     "full_findings_public": {"type": "boolean"},
     "override": {"type": "boolean"},
-    "override_reason": {"type": "string", "minLength": 1}
+    "override_reason": {"type": ["string", "null"], "minLength": 1}
   }
 }

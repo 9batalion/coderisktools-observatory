@@ -15,7 +15,20 @@ REQUIRED = ["report.json", "report.md", "index.html", "scan-summary.json", "publ
 
 def make_bundle(root):
     root = Path(root)
-    for name in REQUIRED:
+    sha = "a" * 40
+    report = {
+        "schema_version": "1", "repository_name": "repo", "repository_url": "https://github.com/owner/repo",
+        "target": {"target_id": "owner-repo", "repository_url": "https://github.com/owner/repo", "requested_ref": "main", "resolved_sha": sha, "source": "test", "selection_reason": "fixture", "license_status": "recognized", "execution_allowed": False, "publication_mode": "public-summary", "status": "scanned"},
+        "scan": {"scanner_id": "scanner", "scanner_version": "1", "ruleset_digest": "sha256:" + "b" * 64, "target_sha": sha, "status": "complete", "errors": [], "warnings": [], "findings": []},
+        "findings": [], "publication_decision": {"decision": "PUBLISH", "reviewer": "operator", "reason_codes": ["CLEAN"], "approved_artifacts": ["report.json"], "full_findings_public": False, "override": False, "override_reason": None},
+        "limitations": ["fixture"], "disclaimer": "Evidence, not certification.",
+    }
+    decision = {"decision": "PUBLISH", "reviewer": "operator", "reason_codes": ["CLEAN"], "approved_artifacts": ["report.json"], "full_findings_public": False, "override": False, "override_reason": None}
+    review = {"reviewer": "operator", "decision": "PUBLISH", "reason_codes": ["CLEAN"], "target_sha": sha, "manual_gate_required": True}
+    (root / "report.json").write_text(json.dumps(report) + "\n")
+    (root / "publication-decision.json").write_text(json.dumps(decision) + "\n")
+    (root / "review-record.json").write_text(json.dumps(review) + "\n")
+    for name in (set(REQUIRED) - {"report.json", "publication-decision.json", "review-record.json"}):
         (root / name).write_text(name + "\n")
     entries = []
     for name in REQUIRED:
@@ -42,6 +55,17 @@ class BundleVerificationTests(unittest.TestCase):
             result = verify_bundle(Path(directory))
         self.assertFalse(result.valid)
         self.assertTrue(any("hash" in error for error in result.errors))
+
+    def test_schema_tampering_fails_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            make_bundle(directory)
+            report_path = Path(directory) / "report.json"
+            report = json.loads(report_path.read_text())
+            report["execution_allowed"] = True
+            report_path.write_text(json.dumps(report))
+            result = verify_bundle(Path(directory))
+        self.assertFalse(result.valid)
+        self.assertTrue(any("schema validation failed" in error for error in result.errors))
 
     def test_cli_verify_returns_machine_result(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -5,9 +5,18 @@ import hashlib
 import json
 from pathlib import Path, PurePosixPath
 
+from observatory.verification.schema import SchemaValidationError, validate_json_file
+
 _REQUIRED = {
     "report.json", "report.md", "index.html", "scan-summary.json",
     "publication-decision.json", "review-record.json",
+}
+_SCHEMA_ROOT = Path(__file__).resolve().parents[3] / "schemas"
+_SCHEMA_FILES = {
+    "manifest.json": "manifest.schema.json",
+    "report.json": "report.schema.json",
+    "publication-decision.json": "publication-decision.schema.json",
+    "review-record.json": "review-record.schema.json",
 }
 
 
@@ -55,6 +64,13 @@ def verify_bundle(root):
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         return VerificationResult(False, [f"invalid manifest: {exc}"], checked)
+    for artifact_name, schema_name in _SCHEMA_FILES.items():
+        artifact_path = root / artifact_name
+        schema_path = _SCHEMA_ROOT / schema_name
+        try:
+            validate_json_file(artifact_path, schema_path)
+        except (OSError, SchemaValidationError) as exc:
+            errors.append(f"schema validation failed: {artifact_name}: {exc}")
     artifacts = manifest.get("artifacts") if isinstance(manifest, dict) else None
     if not isinstance(artifacts, list):
         return VerificationResult(False, ["manifest artifacts must be a list"], checked)
