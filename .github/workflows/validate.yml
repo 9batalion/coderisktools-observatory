@@ -62,6 +62,29 @@ jobs:
             --path . \
             --ruleset-digest "$RULESET_DIGEST" \
             --json
+      - name: Build static status page offline
+        run: |
+          rm -rf "$RUNNER_TEMP/observatory-status"
+          PYTHONPATH=src python3 -m observatory status \
+            --output-dir "$RUNNER_TEMP/observatory-status" \
+            --generated-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --build-sha "$GITHUB_SHA" \
+            --reports 0 --digests 0 --retractions 0 --partial-scans 0 \
+            --feed-status healthy --self-scan-decision PUBLISH \
+            --self-scan-findings 0 --benchmark-passed --json
+          PYTHONPATH=src python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          root = Path(os.environ["RUNNER_TEMP"]) / "observatory-status"
+          status = json.loads((root / "status.json").read_text())
+          assert status["last_build_sha"] == os.environ["GITHUB_SHA"]
+          assert status["self_scan"]["finding_count"] == 0
+          assert status["benchmark"]["passed"] is True
+          assert (root / "index.html").is_file()
+          assert b"Content-Security-Policy" in (root / "index.html").read_bytes()
+          print("static status build: PASS")
+          PY
       - name: Check action pins
         run: |
           python3 - <<'PY'
