@@ -1,4 +1,5 @@
 import json
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -44,6 +45,8 @@ class SecretScannerAdapterTests(unittest.TestCase):
             SecretScannerAdapter(command, DIGEST).scan("/tmp/target", SHA)
 
     def test_real_scanner_empty_directory_smoke(self):
+        if shutil.which("secret-scanner") is None:
+            self.skipTest("optional local secret-scanner CLI is not installed")
         adapter = SecretScannerAdapter(["secret-scanner"], DIGEST)
         with tempfile.TemporaryDirectory() as target:
             result = adapter.scan(target, SHA)
