@@ -18,13 +18,17 @@ jobs:
         with:
           repository: 9batalion/coderisktools-scanner
           ref: 1c45de48edf1a36d3fda332ffa5e59da9fcd4631
-          path: ${{ runner.temp }}/coderisktools-scanner
+          path: .ci/coderisktools-scanner
       - name: Install pinned scanner
         run: |
-          python3 -m venv "$RUNNER_TEMP/scanner-venv"
-          "$RUNNER_TEMP/scanner-venv/bin/python" -m pip install --quiet --no-deps "$RUNNER_TEMP/coderisktools-scanner"
+          python3 -m venv .ci/scanner-venv
+          .ci/scanner-venv/bin/python -m pip install --quiet --no-deps .ci/coderisktools-scanner
       - name: Derive ruleset provenance
-        run: echo "RULESET_DIGEST=$($RUNNER_TEMP/scanner-venv/bin/python scripts/ruleset_digest.py)" >> "$GITHUB_ENV"
+        run: echo "RULESET_DIGEST=$(.ci/scanner-venv/bin/python scripts/ruleset_digest.py)" >> "$GITHUB_ENV"
+      - name: Move scanner runtime outside workspace
+        run: |
+          mv .ci/scanner-venv "$RUNNER_TEMP/scanner-venv"
+          rm -rf .ci/coderisktools-scanner .ci
       - name: Run tests
         run: python3 -m unittest discover -s tests -v
       - name: Compile Python
