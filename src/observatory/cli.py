@@ -9,6 +9,7 @@ import tempfile
 
 from observatory.adapters.secret_scanner import SecretScannerAdapter
 from observatory.reporting.runner import run_pipeline
+from observatory.verification.bundle import verify_bundle
 
 
 def build_parser():
@@ -26,12 +27,20 @@ def build_parser():
     scan.add_argument("--ruleset-digest", required=True, help="SHA-256 digest of the scanner ruleset")
     scan.add_argument("--scanner-command", default="secret-scanner", help="Scanner executable and fixed arguments")
     scan.add_argument("--json", action="store_true", help="Print machine-readable result summary")
+    verify = subparsers.add_parser("verify", help="Verify report manifest, hashes and bundle paths")
+    verify.add_argument("bundle", type=Path, help="Report bundle directory")
+    verify.add_argument("--json", action="store_true", help="Print machine-readable verification result")
     return parser
 
 
 def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.command == "verify":
+        result = verify_bundle(args.bundle)
+        payload = {"valid": result.valid, "errors": result.errors, "checked_files": result.checked_files}
+        print(json.dumps(payload, sort_keys=True) if args.json else ("VALID" if result.valid else "INVALID"))
+        return 0 if result.valid else 2
     if args.command != "scan":
         parser.error("unsupported command")
     source = str(args.source)
