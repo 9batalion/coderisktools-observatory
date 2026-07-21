@@ -28,6 +28,9 @@ jobs:
       - name: Move scanner runtime outside workspace
         run: |
           mv .ci/scanner-venv "$RUNNER_TEMP/scanner-venv"
+          mkdir -p "$RUNNER_TEMP/scanner-bin"
+          printf '%s\n' '#!/usr/bin/env bash' 'exec "$RUNNER_TEMP/scanner-venv/bin/python" -m src "$@"' > "$RUNNER_TEMP/scanner-bin/secret-scanner"
+          chmod 755 "$RUNNER_TEMP/scanner-bin/secret-scanner"
           rm -rf .ci/coderisktools-scanner .ci
       - name: Run tests
         run: python3 -m unittest discover -s tests -v
@@ -47,14 +50,14 @@ jobs:
           PY
       - name: Run real scanner benchmark
         run: |
-          PATH="$RUNNER_TEMP/scanner-venv/bin:$PATH" PYTHONPATH=src \
+          PATH="$RUNNER_TEMP/scanner-bin:$RUNNER_TEMP/scanner-venv/bin:$PATH" PYTHONPATH=src \
             python3 -m observatory benchmark \
             --manifest benchmark/manifest.json \
             --ruleset-digest "$RULESET_DIGEST" \
             --json
       - name: Run real scanner self-scan
         run: |
-          PATH="$RUNNER_TEMP/scanner-venv/bin:$PATH" PYTHONPATH=src \
+          PATH="$RUNNER_TEMP/scanner-bin:$RUNNER_TEMP/scanner-venv/bin:$PATH" PYTHONPATH=src \
             python3 -m observatory self-scan \
             --path . \
             --ruleset-digest "$RULESET_DIGEST" \
