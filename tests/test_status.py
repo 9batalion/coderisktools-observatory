@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from observatory.status import build_status, render_status_html, write_status_page
+from observatory.status import build_status, render_status_html, summarize_reports_repository, write_status_page
 
 
 class StatusTests(unittest.TestCase):
@@ -26,7 +26,7 @@ class StatusTests(unittest.TestCase):
         self.assertNotIn("operator", status)
         self.assertEqual(set(status), {
             "schema_version", "generated_at", "last_build_sha", "last_publication",
-            "counts", "feeds", "self_scan", "benchmark",
+            "publication_scope", "counts", "feeds", "self_scan", "benchmark",
         })
 
     def test_rejects_invalid_counts_and_private_values(self):
@@ -50,6 +50,21 @@ class StatusTests(unittest.TestCase):
         self.assertNotIn("<script>alert(1)</script>", html)
         self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", html)
         self.assertNotIn("http", html)
+
+    def test_summarizes_canonical_report_tree_and_scope(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            revision = root / "public/reports/github/o/r/" / ("a" * 40) / "r1"
+            revision.mkdir(parents=True)
+            (revision / "report.json").write_text('{"schema_version":"1.0"}', encoding="utf-8")
+            (revision / "retraction.json").write_text('{}', encoding="utf-8")
+            weekly = root / "public/weekly/2026-W29"
+            weekly.mkdir(parents=True)
+            (weekly / "report.json").write_text('{}', encoding="utf-8")
+            self.assertEqual(summarize_reports_repository(root), {
+                "reports": 1, "digests": 1, "retractions": 1,
+                "partial_scans": 0, "publication_scope": "synthetic",
+            })
 
     def test_write_status_page_is_deterministic(self):
         status = build_status(

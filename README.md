@@ -80,6 +80,8 @@ PYTHONPATH=src python3 -m observatory status \
   --benchmark-passed
 ```
 
+For a checked-out reports repository, use `--reports-repo <path>` instead of the four manual counters. The loader reads only canonical `public/reports/github/**` and `public/weekly/*/report.json` artifacts and emits `publication_scope` as `empty`, `synthetic`, `real` or `mixed`. It never reads `operator/`.
+
 The command writes only aggregate `status.json` and static `index.html`; it does not publish findings, operator identity, raw scanner output or repository-private data.
 
 ## Local development
