@@ -1,6 +1,8 @@
 name: Publish WordPress GitHub Reports hub
 
 on:
+  schedule:
+    - cron: "17 * * * *"
   workflow_dispatch:
     inputs:
       page_id:
@@ -40,8 +42,12 @@ jobs:
           WP_APP_AUTH: ${{ secrets.WP_APP_AUTH }}
           WP_PAGE_ID: ${{ inputs.page_id }}
         run: |
-          args=(--page-id "$WP_PAGE_ID" --latest-json-url '${{ inputs.latest_json_url }}')
-          if [ '${{ inputs.dry_run }}' = 'true' ]; then
+          page_id='${{ inputs.page_id }}'
+          latest_json_url='${{ inputs.latest_json_url }}'
+          if [ -z "$page_id" ]; then page_id=1217; fi
+          if [ -z "$latest_json_url" ]; then latest_json_url='https://raw.githubusercontent.com/9batalion/coderisktools-observatory-reports/main/public/weekly/latest.json'; fi
+          args=(--page-id "$page_id" --latest-json-url "$latest_json_url")
+          if [ "$GITHUB_EVENT_NAME" != 'schedule' ] && [ '${{ inputs.dry_run }}' = 'true' ]; then
             args+=(--dry-run)
           fi
           python3 scripts/sync_wordpress_reports_hub.py "${args[@]}"
