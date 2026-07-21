@@ -1,0 +1,58 @@
+name: Publish WordPress GitHub Reports hub
+
+on:
+  workflow_dispatch:
+    inputs:
+      page_id:
+        description: WordPress page ID
+        required: false
+        default: "1217"
+        type: string
+      latest_json_url:
+        description: Public reports latest.json URL
+        required: false
+        default: https://raw.githubusercontent.com/9batalion/coderisktools-observatory-reports/main/public/weekly/latest.json
+        type: string
+      dry_run:
+        description: Read, render and verify candidate without writing WordPress
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    environment:
+      name: wordpress-publication
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout trusted source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Render and optionally publish bounded hub block
+        env:
+          WP_API_BASE_URL: ${{ secrets.WP_API_BASE_URL }}
+          WP_USERNAME: ${{ secrets.WP_USERNAME }}
+          WP_APP_AUTH: ${{ secrets.WP_APP_AUTH }}
+          WP_PAGE_ID: ${{ inputs.page_id }}
+        run: |
+          args=(--page-id "$WP_PAGE_ID" --latest-json-url '${{ inputs.latest_json_url }}')
+          if [ '${{ inputs.dry_run }}' = 'true' ]; then
+            args+=(--dry-run)
+          fi
+          python3 scripts/sync_wordpress_reports_hub.py "${args[@]}"
+
+      - name: Public smoke
+        if: ${{ inputs.dry_run == false }}
+        run: |
+          url="https://coderisktools.store/github-reports/?hub_workflow_smoke=${GITHUB_SHA}"
+          html="$(curl --fail --silent --show-error --location --max-time 30 "$url")"
+          grep -Fq 'PUBLIC PUBLICATION HUB' <<<"$html"
+          grep -Fq 'Open latest named review' <<<"$html"
+          grep -Fq 'Open source repository' <<<"$html"
+          ! grep -Eiq 'fatal error|critical error|parse error|database error' <<<"$html"
+          echo 'WordPress public smoke: PASS'
