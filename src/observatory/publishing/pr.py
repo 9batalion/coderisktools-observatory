@@ -101,9 +101,13 @@ def _run_git(repo, *args):
 
 
 def _extract_archive(data, snapshot):
+    seen = set()
     with tarfile.open(fileobj=io.BytesIO(data), mode="r:") as archive:
         for member in archive.getmembers():
             path = PurePosixPath(member.name)
+            if path.as_posix() in seen:
+                raise ValueError("duplicate origin snapshot path")
+            seen.add(path.as_posix())
             if path.is_absolute() or not path.parts or any(part in {"", ".", ".."} for part in path.parts):
                 raise ValueError("unsafe origin snapshot path")
             if not (member.isdir() or member.isreg()):

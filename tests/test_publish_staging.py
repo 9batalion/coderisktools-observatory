@@ -51,6 +51,16 @@ class PublishStagingTests(unittest.TestCase):
                 _extract_archive(data.getvalue(), Path(directory))
             self.assertFalse((Path(directory).parent / "escape.txt").exists())
 
+    def test_origin_snapshot_rejects_duplicate_path(self):
+        data = io.BytesIO()
+        with tarfile.open(fileobj=data, mode="w:") as archive:
+            for content in (b"a", b"b"):
+                member = tarfile.TarInfo("public/reports/file"); member.size = 1
+                archive.addfile(member, io.BytesIO(content))
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(ValueError):
+                _extract_archive(data.getvalue(), Path(directory))
+
     def test_origin_snapshot_rejects_symlink(self):
         data = io.BytesIO()
         with tarfile.open(fileobj=data, mode="w:") as archive:
