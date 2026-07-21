@@ -1,7 +1,9 @@
 import json
+import io
 import os
 import subprocess
 import sys
+import tarfile
 import tempfile
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parents[1] / "src"))
@@ -11,7 +13,7 @@ from unittest import mock
 
 from observatory.contracts import PublicationDecision, ScanResult, Target
 from observatory.reporting.builder import ReportModel, build_report_bundle
-from observatory.publishing.pr import PublicationError, create_publication_pr, prepare_publication
+from observatory.publishing.pr import PublicationError, _extract_archive, create_publication_pr, prepare_publication
 
 SHA = "f" * 40
 DIGEST = "sha256:" + "1" * 64
@@ -39,6 +41,25 @@ def make_bundle(root, decision_name="PUBLISH"):
 
 
 class PublishStagingTests(unittest.TestCase):
+    def test_origin_snapshot_rejects_traversal(self):
+        data = io.BytesIO()
+        with tarfile.open(fileobj=data, mode="w:") as archive:
+            member = tarfile.TarInfo("../escape.txt"); member.size = 1
+            archive.addfile(member, io.BytesIO(b"x"))
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(ValueError):
+                _extract_archive(data.getvalue(), Path(directory))
+            self.assertFalse((Path(directory).parent / "escape.txt").exists())
+
+    def test_origin_snapshot_rejects_symlink(self):
+        data = io.BytesIO()
+        with tarfile.open(fileobj=data, mode="w:") as archive:
+            member = tarfile.TarInfo("public/reports/link"); member.type = tarfile.SYMTYPE; member.linkname = "/etc/passwd"
+            archive.addfile(member)
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(ValueError):
+                _extract_archive(data.getvalue(), Path(directory))
+
     def test_publish_stages_verified_publish_bundle_under_canonical_path(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
