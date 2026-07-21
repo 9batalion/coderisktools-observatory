@@ -27,6 +27,19 @@ Every report states its target SHA, scope, tools, ruleset digest, completeness, 
 
 Bootstrap stage. The project is not production-ready and no real report is published by this repository. Follow `Obserwator.md` and `Obserwator_todo.md` in the workspace for the governing plan.
 
+## Benchmark
+
+Run the deterministic local scanner/policy corpus with the installed OSS scanner:
+
+```bash
+PYTHONPATH=src python3 -m observatory benchmark \
+  --manifest benchmark/manifest.json \
+  --ruleset-digest sha256:<64 lowercase hex characters> \
+  --json
+```
+
+Exit codes are `0` when every case matches, `2` when a case mismatches, and `3` for an invalid manifest or runtime error. The positive fixture is assembled only in a temporary directory from split parts; raw secret material is not stored in the repository. The benchmark output contains statuses, counts, decisions and reason codes, never raw evidence.
+
 ## Local development
 
 ```bash
