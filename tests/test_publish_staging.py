@@ -110,6 +110,14 @@ class PublishStagingTests(unittest.TestCase):
             self.assertEqual(result.commit, "abc123")
             self.assertTrue(result.plan.destination.exists())
 
+    def test_create_publication_pr_maps_snapshot_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); reports_repo = root / "reports"; reports_repo.mkdir(); bundle = make_bundle(root)
+            outputs = iter(["", "", ""])
+            with mock.patch("observatory.publishing.pr._run_git", side_effect=lambda *args: next(outputs)), mock.patch("observatory.publishing.pr._origin_snapshot", side_effect=ValueError("unsafe origin snapshot")):
+                with self.assertRaises(PublicationError):
+                    create_publication_pr(reports_repo, bundle, revision=5, branch="publish/test-r5")
+
     def test_create_publication_pr_stops_on_immutability_failure(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory); reports_repo = root / "reports"; reports_repo.mkdir(); bundle = make_bundle(root)

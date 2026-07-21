@@ -141,7 +141,10 @@ def create_publication_pr(reports_repo, bundle, revision=1, branch=None, title=N
         branch = f"publish/observatory-{revision}"
     _safe_slug(branch.replace("/", "-"))
     _run_git(repo, "switch", "-c", branch, "origin/main")
-    snapshot = _origin_snapshot(repo)
+    try:
+        snapshot = _origin_snapshot(repo)
+    except (OSError, subprocess.SubprocessError, tarfile.TarError, ValueError) as exc:
+        raise PublicationError("origin snapshot failed") from exc
     try:
         plan = prepare_publication(repo, bundle, revision)
         relative_files = [str(path.relative_to(repo)) for path in plan.artifacts]
