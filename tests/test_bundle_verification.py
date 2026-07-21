@@ -57,6 +57,33 @@ class BundleVerificationTests(unittest.TestCase):
         self.assertFalse(result.valid)
         self.assertTrue(any("hash" in error or "size mismatch" in error for error in result.errors))
 
+    def test_cross_artifact_sha_mismatch_fails_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            make_bundle(directory)
+            report_path = Path(directory) / "report.json"
+            report = json.loads(report_path.read_text())
+            report["scan"]["target_sha"] = "c" * 40
+            report_path.write_text(json.dumps(report))
+            result = verify_bundle(Path(directory))
+        self.assertFalse(result.valid)
+        self.assertTrue(any("cross-artifact target_sha mismatch" in error for error in result.errors))
+
+    def test_cross_artifact_decision_and_count_mismatch_fail_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            make_bundle(directory)
+            decision_path = Path(directory) / "review-record.json"
+            review = json.loads(decision_path.read_text())
+            review["decision"] = "HOLD"
+            decision_path.write_text(json.dumps(review))
+            summary_path = Path(directory) / "scan-summary.json"
+            summary = json.loads(summary_path.read_text())
+            summary["finding_count"] = 1
+            summary_path.write_text(json.dumps(summary))
+            result = verify_bundle(Path(directory))
+        self.assertFalse(result.valid)
+        self.assertTrue(any("cross-artifact decision mismatch" in error for error in result.errors))
+        self.assertTrue(any("cross-artifact finding_count mismatch" in error for error in result.errors))
+
     def test_manifest_size_mismatch_fails_closed(self):
         with tempfile.TemporaryDirectory() as directory:
             make_bundle(directory)
