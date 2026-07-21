@@ -78,6 +78,9 @@ def main() -> int:
     a, b = raw.index(START), raw.index(END) + len(END)
     candidate = raw[:a] + render_block(latest_url) + raw[b:]
     print(json.dumps({"page_id": page.get("id"), "latest_url": latest_url, "candidate_chars": len(candidate), "dry_run": args.dry_run}, sort_keys=True))
+    if raw == candidate:
+        print(json.dumps({"readback": "UNCHANGED", "write_status": None, "page_id": page.get("id")}, sort_keys=True))
+        return 0
     if args.dry_run:
         return 0
     status, updated = request(page_url, method="POST", payload=json.dumps({"content": candidate}).encode(), auth=(username, auth_value))
