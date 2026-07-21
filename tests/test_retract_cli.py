@@ -13,6 +13,7 @@ from observatory.contracts import PublicationDecision, ScanResult, Target
 from observatory.publishing.pr import prepare_publication
 from observatory.publishing.retract import PublicationError, create_retraction_pr, prepare_retraction
 from observatory.reporting.builder import ReportModel, build_report_bundle
+from observatory.verification.schema import validate_json_file
 
 SHA = "e" * 40
 DIGEST = "sha256:" + "2" * 64
@@ -40,6 +41,7 @@ class RetractionTests(unittest.TestCase):
             self.assertEqual(payload["status"], "WITHDRAWN")
             self.assertEqual(payload["head_commit"], SHA)
             self.assertEqual(payload["retracted_at"], "2026-07-21T12:00:00Z")
+            validate_json_file(plan.path, Path(__file__).parents[1] / "schemas/retraction.schema.json")
             with self.assertRaises(PublicationError):
                 prepare_retraction(repo, URL, SHA, revision=2, reason="second")
 
