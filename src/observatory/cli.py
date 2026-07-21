@@ -104,6 +104,7 @@ def build_parser():
     scan.add_argument("--workspace", type=Path, help="Temporary acquisition workspace")
     scan.add_argument("--ruleset-digest", required=True, help="SHA-256 digest of the scanner ruleset")
     scan.add_argument("--scanner-command", default="secret-scanner", help="Scanner executable and fixed arguments")
+    scan.add_argument("--scan-profile", choices=["auto", "small", "medium", "large", "huge"], default="auto", help="Resource profile; auto selects from target tree size")
     scan.add_argument("--json", action="store_true", help="Print machine-readable result summary")
     benchmark = subparsers.add_parser("benchmark", help="Run deterministic local scanner/policy benchmark")
     benchmark.add_argument("--manifest", type=Path, default=Path("benchmark/manifest.json"))
@@ -391,7 +392,7 @@ def main(argv=None):
     workspace_context = tempfile.TemporaryDirectory() if args.workspace is None else None
     workspace = args.workspace or Path(workspace_context.name)
     try:
-        adapter = SecretScannerAdapter(shlex.split(args.scanner_command), args.ruleset_digest)
+        adapter = SecretScannerAdapter(shlex.split(args.scanner_command), args.ruleset_digest, profile=args.scan_profile)
         result = run_pipeline(source, args.sha, workspace, args.output, args.repository_url, args.license_status, adapter)
     except Exception as exc:
         if args.verbose:
@@ -405,6 +406,7 @@ def main(argv=None):
         "scan_status": result.scan.status,
         "finding_count": len(result.findings),
         "decision": result.decision.decision,
+        "scan_profile": adapter.active_profile,
         "output": str(args.output),
     }
     print(json.dumps(summary, sort_keys=True) if args.json else f"{summary['decision']}: {summary['output']}")
