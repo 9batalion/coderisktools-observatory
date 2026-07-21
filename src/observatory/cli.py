@@ -20,6 +20,7 @@ from observatory.publishing.pr import create_publication_pr, prepare_publication
 from observatory.publishing.retract import create_retraction_pr, prepare_retraction
 from observatory.target_registry import add_target
 from observatory.verification.bundle import verify_bundle
+from observatory.verification.schema import validate_json_file
 
 
 def build_parser():
@@ -76,6 +77,10 @@ def build_parser():
     immutability.add_argument("--candidate", type=Path, required=True)
     immutability.add_argument("--paths", type=Path, required=True, help="Newline-separated changed report paths")
     immutability.add_argument("--json", action="store_true")
+    schema = subparsers.add_parser("validate-json", help="Validate JSON against a local schema")
+    schema.add_argument("--input", type=Path, required=True)
+    schema.add_argument("--schema", type=Path, required=True)
+    schema.add_argument("--json", action="store_true")
     target = subparsers.add_parser("target", help="Manage the append-only target registry")
     target_commands = target.add_subparsers(dest="target_command", required=True)
     target_add = target_commands.add_parser("add", help="Record an exact-SHA target")
@@ -105,6 +110,16 @@ def build_parser():
 def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.command == "validate-json":
+        try:
+            validate_json_file(args.input, args.schema)
+        except Exception as exc:
+            payload = {"valid": False, "error": str(exc)}
+            print(json.dumps(payload, sort_keys=True) if args.json else "INVALID")
+            return 2
+        payload = {"valid": True, "input": str(args.input), "schema": str(args.schema)}
+        print(json.dumps(payload, sort_keys=True) if args.json else "VALID")
+        return 0
     if args.command == "verify-immutability":
         try:
             raw_paths = args.paths.read_text(encoding="utf-8").splitlines()
