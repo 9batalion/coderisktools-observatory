@@ -1,0 +1,109 @@
+"""Fail-closed verification of a published report bundle."""
+
+from dataclasses import dataclass
+import hashlib
+import json
+from pathlib import Path, PurePosixPath
+
+_REQUIRED = {
+    "report.json", "report.md", "index.html", "scan-summary.json",
+    "publication-decision.json", "review-record.json",
+}
+
+
+@dataclass(frozen=True)
+class VerificationResult:
+    valid: bool
+    errors: list[str]
+    checked_files: list[str]
+
+
+def _safe_name(value):
+    if not isinstance(value, str) or not value or value.startswith("/") or "\\" in value:
+        return False
+    path = PurePosixPath(value)
+    return path.as_posix() == value and ".." not in path.parts and len(path.parts) == 1
+
+
+def _digest(path):
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def verify_bundle(root):
+    root = Path(root)
+    errors = []
+    checked = []
+    if not root.is_dir() or root.is_symlink():
+        return VerificationResult(False, ["bundle root is not a directory"], [])
+    for current, dirs, files in __import__("os").walk(root, followlinks=False):
+        for name in dirs + files:
+            if (Path(current) / name).is_symlink():
+                errors.append(f"symlink rejected: {Path(current, name).relative_to(root)}")
+    manifest_path = root / "manifest.json"
+    checksums_path = root / "checksums.txt"
+    if not manifest_path.is_file():
+        errors.append("missing manifest.json")
+    if not checksums_path.is_file():
+        errors.append("missing checksums.txt")
+    if errors:
+        return VerificationResult(False, errors, checked)
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        return VerificationResult(False, [f"invalid manifest: {exc}"], checked)
+    artifacts = manifest.get("artifacts") if isinstance(manifest, dict) else None
+    if not isinstance(artifacts, list):
+        return VerificationResult(False, ["manifest artifacts must be a list"], checked)
+    seen = set()
+    for item in artifacts:
+        if not isinstance(item, dict) or not _safe_name(item.get("name")):
+            errors.append("unsafe manifest artifact name")
+            continue
+        name = item["name"]
+        if name in seen:
+            errors.append(f"duplicate manifest artifact: {name}")
+            continue
+        seen.add(name)
+        path = root / name
+        if not path.is_file() or path.is_symlink():
+            errors.append(f"missing or unsafe artifact: {name}")
+            continue
+        expected = item.get("sha256")
+        if not isinstance(expected, str) or len(expected) != 64:
+            errors.append(f"invalid hash metadata: {name}")
+            continue
+        actual = _digest(path)
+        checked.append(name)
+        if actual != expected:
+            errors.append(f"hash mismatch: {name}")
+    if seen != _REQUIRED:
+        errors.append("manifest artifact set does not match required report artifacts")
+
+    checksum_names = set()
+    try:
+        lines = checksums_path.read_text(encoding="ascii").splitlines()
+    except (OSError, UnicodeError) as exc:
+        return VerificationResult(False, [f"invalid checksums.txt: {exc}"], checked)
+    for line in lines:
+        parts = line.split("  ", 1)
+        if len(parts) != 2 or len(parts[0]) != 64 or not _safe_name(parts[1]):
+            errors.append("invalid checksums entry")
+            continue
+        digest, name = parts
+        if name in checksum_names:
+            errors.append(f"duplicate checksum entry: {name}")
+            continue
+        checksum_names.add(name)
+        path = root / name
+        if not path.is_file() or path.is_symlink():
+            errors.append(f"checksum file missing or unsafe: {name}")
+            continue
+        if _digest(path) != digest:
+            errors.append(f"checksum mismatch: {name}")
+    if checksum_names != (_REQUIRED | {"manifest.json"}):
+        errors.append("checksum artifact set is incomplete or contains extras")
+    return VerificationResult(not errors, errors, sorted(set(checked)))
