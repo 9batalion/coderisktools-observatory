@@ -12,7 +12,7 @@ from observatory.verification.schema import SchemaValidationError, validate_json
 class SchemaArtifactTests(unittest.TestCase):
     def test_core_schemas_are_closed_json_objects(self):
         root = Path(__file__).parents[1] / "schemas"
-        names = ["target.schema.json", "scan-result.schema.json", "normalized-finding.schema.json", "publication-decision.schema.json", "manifest.schema.json", "review-record.schema.json", "retraction.schema.json"]
+        names = ["target.schema.json", "scan-result.schema.json", "normalized-finding.schema.json", "publication-decision.schema.json", "manifest.schema.json", "review-record.schema.json", "retraction.schema.json", "report.schema.json"]
         for name in names:
             with self.subTest(name=name):
                 data = json.loads((root / name).read_text())
