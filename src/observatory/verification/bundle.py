@@ -17,6 +17,7 @@ _SCHEMA_FILES = {
     "report.json": "report.schema.json",
     "publication-decision.json": "publication-decision.schema.json",
     "review-record.json": "review-record.schema.json",
+    "scan-summary.json": "scan-summary.schema.json",
 }
 
 

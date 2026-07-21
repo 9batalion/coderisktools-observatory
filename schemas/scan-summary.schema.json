@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coderisktools.org/schemas/scan-summary.schema.json",
+  "title": "Observatory Scan Summary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["target_sha", "status", "finding_count", "error_count", "warning_count"],
+  "properties": {
+    "target_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "status": {"enum": ["complete", "partial", "failed"]},
+    "finding_count": {"type": "integer", "minimum": 0},
+    "error_count": {"type": "integer", "minimum": 0},
+    "warning_count": {"type": "integer", "minimum": 0}
+  }
+}

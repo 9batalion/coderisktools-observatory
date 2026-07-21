@@ -12,7 +12,7 @@ from observatory.verification.schema import SchemaValidationError, validate_json
 class SchemaArtifactTests(unittest.TestCase):
     def test_core_schemas_are_closed_json_objects(self):
         root = Path(__file__).parents[1] / "schemas"
-        names = ["target.schema.json", "scan-result.schema.json", "normalized-finding.schema.json", "publication-decision.schema.json", "manifest.schema.json", "review-record.schema.json", "retraction.schema.json", "report.schema.json"]
+        names = ["target.schema.json", "scan-result.schema.json", "normalized-finding.schema.json", "publication-decision.schema.json", "manifest.schema.json", "review-record.schema.json", "retraction.schema.json", "report.schema.json", "scan-summary.schema.json"]
         for name in names:
             with self.subTest(name=name):
                 data = json.loads((root / name).read_text())
@@ -25,6 +25,7 @@ class SchemaArtifactTests(unittest.TestCase):
             "manifest.schema.json": {"manifest_version": "1", "target_sha": "a" * 40, "artifacts": [{"name": "report.json", "size": 12, "sha256": "b" * 64}]},
             "review-record.schema.json": {"reviewer": "operator", "decision": "PUBLISH", "reason_codes": ["CLEAN"], "target_sha": "a" * 40, "manual_gate_required": True},
             "retraction.schema.json": {"head_commit": "a" * 40, "message": "withdrawn", "reason": "superseded", "report_revision": 1, "repository": "owner/repo", "retracted_at": "2026-07-21T12:00:00Z", "schema_version": "1.0", "status": "WITHDRAWN"},
+            "scan-summary.schema.json": {"target_sha": "a" * 40, "status": "complete", "finding_count": 0, "error_count": 0, "warning_count": 0},
         }
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)
