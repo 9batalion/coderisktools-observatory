@@ -13,6 +13,7 @@ from observatory.acquisition.clone import acquire_repository
 from observatory.contracts import Target
 from observatory.reporting.runner import run_pipeline
 from observatory.target_registry import add_target
+from observatory.normalization.findings import normalize_scanner_findings
 from observatory.verification.bundle import verify_bundle
 
 
@@ -26,6 +27,11 @@ def build_parser():
     acquire.add_argument("--sha", required=True)
     acquire.add_argument("--workspace", type=Path, required=True)
     acquire.add_argument("--json", action="store_true")
+    normalize = subparsers.add_parser("normalize", help="Normalize a redacted scanner JSON result")
+    normalize.add_argument("--input", type=Path, required=True)
+    normalize.add_argument("--sha", required=True)
+    normalize.add_argument("--scanner-id", required=True)
+    normalize.add_argument("--output", type=Path, required=True)
     target = subparsers.add_parser("target", help="Manage the append-only target registry")
     target_commands = target.add_subparsers(dest="target_command", required=True)
     target_add = target_commands.add_parser("add", help="Record an exact-SHA target")
@@ -55,6 +61,24 @@ def build_parser():
 def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.command == "normalize":
+        temporary = args.output.with_name(args.output.name + ".tmp")
+        try:
+            if args.input.stat().st_size > 5 * 1024 * 1024:
+                raise ValueError("scanner JSON input limit exceeded")
+            payload = json.loads(args.input.read_text(encoding="utf-8"))
+            if not isinstance(payload, dict) or not isinstance(payload.get("findings"), list):
+                raise ValueError("scanner JSON must contain a findings array")
+            findings = normalize_scanner_findings(payload["findings"], args.sha, args.scanner_id)
+            temporary.parent.mkdir(parents=True, exist_ok=True)
+            temporary.write_text(json.dumps([asdict(item) for item in findings], ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+            temporary.replace(args.output)
+        except Exception as exc:
+            temporary.unlink(missing_ok=True)
+            if args.verbose:
+                print(f"observatory: normalization failed: {type(exc).__name__}", file=sys.stderr)
+            return 3
+        return 0
     if args.command == "acquire":
         try:
             result = acquire_repository(args.source, args.sha, args.workspace)
