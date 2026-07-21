@@ -112,7 +112,7 @@ def render_status_html(status):
         "benchmark": "PASS" if benchmark["passed"] else "FAIL",
     }
     return """<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Observatory status</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>Observatory status</title>
 <style>body{{font:16px system-ui,sans-serif;max-width:760px;margin:3rem auto;padding:0 1rem;color:#17202a}}main{{border:1px solid #d7dde3;border-radius:12px;padding:1.5rem}}dt{{font-weight:700;margin-top:.8rem}}dd{{margin:.15rem 0 0}}code{{font-size:.85em;overflow-wrap:anywhere}}</style></head>
 <body><main><h1>Observatory status</h1><dl>
 <dt>Generated</dt><dd>{generated_at}</dd><dt>Last build</dt><dd><code>{build_sha}</code></dd><dt>Last publication</dt><dd>{last_publication}</dd><dt>Publication scope</dt><dd>{publication_scope}</dd>

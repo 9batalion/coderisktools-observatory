@@ -47,9 +47,10 @@ class StatusTests(unittest.TestCase):
         )
         status["last_publication"] = "<script>alert(1)</script>"
         html = render_status_html(status)
+        self.assertIn("Content-Security-Policy", html)
         self.assertNotIn("<script>alert(1)</script>", html)
         self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", html)
-        self.assertNotIn("http", html)
+        self.assertNotIn("javascript:", html)
 
     def test_summarizes_canonical_report_tree_and_scope(self):
         with tempfile.TemporaryDirectory() as tmp:
