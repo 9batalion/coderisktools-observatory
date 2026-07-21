@@ -15,7 +15,7 @@ from observatory.normalization.findings import normalize_scanner_findings
 from observatory.policy.engine import evaluate_publication
 from observatory.reporting.builder import ReportModel, build_report_bundle
 from observatory.reporting.runner import run_pipeline
-from observatory.publishing.pr import prepare_publication
+from observatory.publishing.pr import create_publication_pr, prepare_publication
 from observatory.target_registry import add_target
 from observatory.verification.bundle import verify_bundle
 
@@ -52,6 +52,11 @@ def build_parser():
     publish.add_argument("--bundle", type=Path, required=True)
     publish.add_argument("--reports-repo", type=Path, required=True)
     publish.add_argument("--revision", type=int, default=1)
+    publish.add_argument("--create-pr", action="store_true", help="Push a branch and create the GitHub PR")
+    publish.add_argument("--branch", help="Explicit publication branch")
+    publish.add_argument("--title", help="PR title and commit message")
+    publish.add_argument("--body", help="PR body")
+    publish.add_argument("--remote-repo", help="GitHub owner/repository override")
     target = subparsers.add_parser("target", help="Manage the append-only target registry")
     target_commands = target.add_subparsers(dest="target_command", required=True)
     target_add = target_commands.add_parser("add", help="Record an exact-SHA target")
@@ -83,6 +88,17 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.command == "publish-pr":
         try:
+            if args.create_pr:
+                result = create_publication_pr(
+                    args.reports_repo, args.bundle, args.revision, args.branch,
+                    args.title, args.body, args.remote_repo,
+                )
+                print(json.dumps({
+                    "created": True, "url": result.url, "branch": result.branch,
+                    "commit": result.commit, "destination": str(result.plan.destination),
+                    "target_sha": result.plan.target_sha, "revision": result.plan.revision,
+                }, sort_keys=True))
+                return 0
             plan = prepare_publication(args.reports_repo, args.bundle, args.revision)
         except Exception as exc:
             if args.verbose:
