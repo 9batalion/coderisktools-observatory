@@ -43,7 +43,7 @@ class SecretScannerAdapter:
         except (OSError, subprocess.SubprocessError) as exc:
             raise AdapterError("secret scanner version query failed") from exc
         value = completed.stdout.strip()
-        if not value or len(value.encode()) > 1024:
+        if not value or len(value.splitlines()) != 1 or any(ord(char) < 32 or ord(char) == 127 for char in value) or len(value.encode()) > 1024:
             raise AdapterError("secret scanner returned an invalid version")
         return value
 
