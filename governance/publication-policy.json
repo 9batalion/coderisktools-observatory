@@ -1,0 +1,16 @@
+{
+  "schema_version": "1",
+  "policy_version": "0.1.0",
+  "default": "HOLD",
+  "rules": [
+    {"when": "scan.status != complete", "decision": "HOLD", "reason_code": "SCAN_NOT_COMPLETE"},
+    {"when": "scan.errors is not empty", "decision": "HOLD", "reason_code": "SCAN_ERRORS_PRESENT"},
+    {"when": "target.license_status != recognized", "decision": "HOLD", "reason_code": "LICENSE_UNRESOLVED"},
+    {"when": "finding.secret and confidence == low", "decision": "REJECT", "reason_code": "LOW_CONFIDENCE_SECRET"},
+    {"when": "finding.secret and confidence in [high, confirmed]", "decision": "HOLD", "reason_code": "ACTIVE_SECRET_REQUIRES_REVIEW"},
+    {"when": "finding.visibility == EMBARGOED", "decision": "HOLD", "reason_code": "EMBARGO_REQUIRED"},
+    {"when": "no findings and scan complete", "decision": "PUBLISH", "reason_code": "COMPLETE_SCAN_NO_FINDINGS"}
+  ],
+  "manual_gate_required": true,
+  "automatic_merge": false
+}
