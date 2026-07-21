@@ -10,10 +10,11 @@ import tempfile
 
 from observatory.adapters.secret_scanner import SecretScannerAdapter
 from observatory.acquisition.clone import acquire_repository
-from observatory.contracts import Target
+from observatory.contracts import NormalizedFinding, ScanResult, Target
+from observatory.normalization.findings import normalize_scanner_findings
+from observatory.policy.engine import evaluate_publication
 from observatory.reporting.runner import run_pipeline
 from observatory.target_registry import add_target
-from observatory.normalization.findings import normalize_scanner_findings
 from observatory.verification.bundle import verify_bundle
 
 
@@ -32,6 +33,11 @@ def build_parser():
     normalize.add_argument("--sha", required=True)
     normalize.add_argument("--scanner-id", required=True)
     normalize.add_argument("--output", type=Path, required=True)
+    decide = subparsers.add_parser("decide", help="Evaluate fail-closed publication policy")
+    decide.add_argument("--scan", type=Path, required=True)
+    decide.add_argument("--findings", type=Path, required=True)
+    decide.add_argument("--license-status", choices=["recognized", "unknown", "restricted"], required=True)
+    decide.add_argument("--output", type=Path, required=True)
     target = subparsers.add_parser("target", help="Manage the append-only target registry")
     target_commands = target.add_subparsers(dest="target_command", required=True)
     target_add = target_commands.add_parser("add", help="Record an exact-SHA target")
@@ -61,6 +67,28 @@ def build_parser():
 def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.command == "decide":
+        temporary = args.output.with_name(args.output.name + ".tmp")
+        try:
+            if args.scan.stat().st_size > 5 * 1024 * 1024 or args.findings.stat().st_size > 5 * 1024 * 1024:
+                raise ValueError("decision input limit exceeded")
+            scan = ScanResult.from_dict(json.loads(args.scan.read_text(encoding="utf-8")))
+            raw_findings = json.loads(args.findings.read_text(encoding="utf-8"))
+            if not isinstance(raw_findings, list):
+                raise ValueError("findings JSON must be an array")
+            findings = [NormalizedFinding.from_dict(item) for item in raw_findings]
+            if any(finding.location["commit"] != scan.target_sha for finding in findings):
+                raise ValueError("finding SHA does not match scan target SHA")
+            decision = evaluate_publication(scan.status, args.license_status, findings, scan.errors)
+            temporary.parent.mkdir(parents=True, exist_ok=True)
+            temporary.write_text(json.dumps(asdict(decision), ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+            temporary.replace(args.output)
+        except Exception as exc:
+            temporary.unlink(missing_ok=True)
+            if args.verbose:
+                print(f"observatory: decision failed: {type(exc).__name__}", file=sys.stderr)
+            return 3
+        return 0
     if args.command == "normalize":
         temporary = args.output.with_name(args.output.name + ".tmp")
         try:
