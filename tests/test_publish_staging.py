@@ -7,10 +7,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parents[1] / "src"))
 
 import unittest
+from unittest import mock
 
 from observatory.contracts import PublicationDecision, ScanResult, Target
 from observatory.reporting.builder import ReportModel, build_report_bundle
-from observatory.publishing.pr import PublicationError, prepare_publication
+from observatory.publishing.pr import PublicationError, create_publication_pr, prepare_publication
 
 SHA = "f" * 40
 DIGEST = "sha256:" + "1" * 64
@@ -62,6 +63,20 @@ class PublishStagingTests(unittest.TestCase):
             payload = json.loads(result.stdout)
             self.assertTrue(payload["staged"])
             self.assertTrue((destination / "public/reports/github/owner/repo" / SHA / "r2" / "report.json").exists())
+
+    def test_create_publication_pr_runs_branch_commit_push_and_gh(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            reports_repo = root / "reports"
+            reports_repo.mkdir()
+            bundle = make_bundle(root)
+            git_outputs = iter(["", "", "", "", "", "abc123", "", "git@github.com:9batalion/coderisktools-observatory-reports.git"])
+            gh_result = subprocess.CompletedProcess(["gh"], 0, "https://github.com/9batalion/coderisktools-observatory-reports/pull/99\n", "")
+            with mock.patch("observatory.publishing.pr._run_git", side_effect=lambda *args: next(git_outputs)), mock.patch("observatory.publishing.pr.subprocess.run", return_value=gh_result):
+                result = create_publication_pr(reports_repo, bundle, revision=3, branch="publish/test-r3")
+            self.assertEqual(result.url, "https://github.com/9batalion/coderisktools-observatory-reports/pull/99")
+            self.assertEqual(result.commit, "abc123")
+            self.assertTrue(result.plan.destination.exists())
 
     def test_publish_rejects_non_publish_decision_and_existing_revision(self):
         with tempfile.TemporaryDirectory() as directory:
