@@ -22,8 +22,8 @@ DEFAULT_LATEST_JSON = (
 def request(url: str, *, method: str = "GET", payload: bytes | None = None, auth: tuple[str, str] | None = None):
     headers = {"Cache-Control": "no-cache", "Pragma": "no-cache"}
     if auth:
-        token = base64.b64encode(f"{auth[0]}:{auth[1]}".encode()).decode()
-        headers["Authorization"] = f"Basic {token}"
+        authorization_value = base64.b64encode(f"{auth[0]}:{auth[1]}".encode()).decode()
+        headers["Authorization"] = f"Basic {authorization_value}"
     if payload is not None:
         headers["Content-Type"] = "application/json"
     req = urllib.request.Request(url, data=payload, headers=headers, method=method)
@@ -66,11 +66,11 @@ def main() -> int:
 
     api_base = os.environ.get("WP_API_BASE_URL", "").rstrip("/")
     username = os.environ.get("WP_USERNAME", "")
-    password = os.environ.get("WP_APP_PASSWORD", "")
-    if not api_base or not username or not password:
-        raise SystemExit("WP_API_BASE_URL, WP_USERNAME and WP_APP_PASSWORD are required")
+    credential = os.environ.get("WP_APP_CREDENTIAL", "")
+    if not api_base or not username or not credential:
+        raise SystemExit("WP_API_BASE_URL, WP_USERNAME and WP_APP_CREDENTIAL are required")
     page_url = f"{api_base}/wp/v2/pages/{urllib.parse.quote(str(args.page_id))}?context=edit"
-    _, page = request(page_url, auth=(username, password))
+    _, page = request(page_url, auth=(username, credential))
     raw = page.get("content", {}).get("raw")
     if not isinstance(raw, str) or raw.count(START) != 1 or raw.count(END) != 1:
         raise SystemExit("page must contain exactly one publication-hub marker pair")
@@ -80,10 +80,10 @@ def main() -> int:
     print(json.dumps({"page_id": page.get("id"), "latest_url": latest_url, "candidate_chars": len(candidate), "dry_run": args.dry_run}, sort_keys=True))
     if args.dry_run:
         return 0
-    status, updated = request(page_url, method="POST", payload=json.dumps({"content": candidate}).encode(), auth=(username, password))
+    status, updated = request(page_url, method="POST", payload=json.dumps({"content": candidate}).encode(), auth=(username, credential))
     if status not in (200, 201):
         raise SystemExit(f"unexpected WordPress write status: {status}")
-    _, readback = request(page_url, auth=(username, password))
+    _, readback = request(page_url, auth=(username, credential))
     if readback.get("content", {}).get("raw") != candidate:
         raise SystemExit("WordPress raw content readback mismatch")
     print(json.dumps({"write_status": status, "readback": "PASS", "page_id": updated.get("id")}, sort_keys=True))

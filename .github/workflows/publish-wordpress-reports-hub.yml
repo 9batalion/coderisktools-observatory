@@ -37,7 +37,7 @@ jobs:
         env:
           WP_API_BASE_URL: ${{ secrets.WP_API_BASE_URL }}
           WP_USERNAME: ${{ secrets.WP_USERNAME }}
-          WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
+          WP_APP_CREDENTIAL: ${{ secrets.WP_APP_CREDENTIAL }}
           WP_PAGE_ID: ${{ inputs.page_id }}
         run: |
           args=(--page-id "$WP_PAGE_ID" --latest-json-url '${{ inputs.latest_json_url }}')
