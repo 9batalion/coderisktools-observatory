@@ -73,6 +73,43 @@ def verify_bundle(root):
             validate_json_file(artifact_path, schema_path)
         except (OSError, SchemaValidationError) as exc:
             errors.append(f"schema validation failed: {artifact_name}: {exc}")
+    documents = {"manifest.json": manifest}
+    for artifact_name in ("report.json", "scan-summary.json", "publication-decision.json", "review-record.json"):
+        try:
+            documents[artifact_name] = json.loads((root / artifact_name).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            documents[artifact_name] = None
+    report = documents.get("report.json") if isinstance(documents.get("report.json"), dict) else {}
+    summary = documents.get("scan-summary.json") if isinstance(documents.get("scan-summary.json"), dict) else {}
+    decision = documents.get("publication-decision.json") if isinstance(documents.get("publication-decision.json"), dict) else {}
+    review = documents.get("review-record.json") if isinstance(documents.get("review-record.json"), dict) else {}
+    if all(isinstance(item, dict) for item in (manifest, report, summary, decision, review)):
+        sha_values = {
+            "manifest": manifest.get("target_sha"),
+            "report.target": report.get("target", {}).get("resolved_sha"),
+            "report.scan": report.get("scan", {}).get("target_sha"),
+            "summary": summary.get("target_sha"),
+            "review": review.get("target_sha"),
+        }
+        if len(set(sha_values.values())) != 1:
+            errors.append("cross-artifact target_sha mismatch: " + json.dumps(sha_values, sort_keys=True))
+        if report.get("repository_url") != report.get("target", {}).get("repository_url"):
+            errors.append("cross-artifact repository_url mismatch")
+        decisions = {
+            "report": report.get("publication_decision", {}).get("decision"),
+            "publication-decision": decision.get("decision"),
+            "review": review.get("decision"),
+        }
+        if len(set(decisions.values())) != 1:
+            errors.append("cross-artifact decision mismatch: " + json.dumps(decisions, sort_keys=True))
+        counts = {
+            "finding_count": (summary.get("finding_count"), len(report.get("findings", []))),
+            "error_count": (summary.get("error_count"), len(report.get("scan", {}).get("errors", []))),
+            "warning_count": (summary.get("warning_count"), len(report.get("scan", {}).get("warnings", []))),
+        }
+        for name, (declared, actual) in counts.items():
+            if declared != actual:
+                errors.append(f"cross-artifact {name} mismatch: declared={declared} actual={actual}")
     artifacts = manifest.get("artifacts") if isinstance(manifest, dict) else None
     if not isinstance(artifacts, list):
         return VerificationResult(False, ["manifest artifacts must be a list"], checked)
