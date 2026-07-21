@@ -56,6 +56,37 @@ class SecretScannerAdapterTests(unittest.TestCase):
         with self.assertRaises(AdapterError):
             SecretScannerAdapter(command, DIGEST).scan("/tmp/target", SHA)
 
+    def test_timeout_is_a_failed_scan_result_with_diagnostic(self):
+        path = Path(tempfile.mkdtemp()) / "slow-scanner.py"
+        path.write_text(
+            "import sys, time\n"
+            "if '--version' in sys.argv: print('secret-scanner 9.9.9')\n"
+            "else: time.sleep(0.2)\n"
+        )
+        result = SecretScannerAdapter([sys.executable, str(path)], DIGEST, timeout_seconds=0.2).scan('/tmp/target', SHA)
+        self.assertEqual(result.status, 'failed')
+        self.assertEqual(result.errors, ['scanner_timeout'])
+
+    def test_profiles_have_increasing_resource_limits(self):
+        small = SecretScannerAdapter.profile('small')
+        medium = SecretScannerAdapter.profile('medium')
+        large = SecretScannerAdapter.profile('large')
+        self.assertLess(small.timeout_seconds, medium.timeout_seconds)
+        self.assertLess(medium.timeout_seconds, large.timeout_seconds)
+        self.assertLess(small.max_output_bytes, medium.max_output_bytes)
+
+    def test_explicit_profile_is_applied(self):
+        command = self._fake({"findings": [], "config_changes": []})
+        adapter = SecretScannerAdapter(command, DIGEST, profile='large')
+        adapter.scan('/tmp/target', SHA)
+        self.assertEqual(adapter.active_profile, 'large')
+
+    def test_auto_profile_uses_tree_size(self):
+        with tempfile.TemporaryDirectory() as target:
+            for index in range(3):
+                Path(target, f'file-{index}.txt').write_text('x' * 10)
+            self.assertEqual(SecretScannerAdapter.profile_for_target(target).name, 'small')
+
     def test_relativizes_only_paths_inside_target(self):
         with tempfile.TemporaryDirectory() as target:
             findings = [{"file": str(Path(target) / "config.env")}, {"file": "/outside/config.env"}]
