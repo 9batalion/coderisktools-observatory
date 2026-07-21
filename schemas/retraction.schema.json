@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coderisktools.org/schemas/retraction.schema.json",
+  "title": "Observatory Retraction",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["head_commit", "message", "reason", "report_revision", "repository", "retracted_at", "schema_version", "status"],
+  "properties": {
+    "head_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "message": {"type": "string", "minLength": 1},
+    "reason": {"type": "string", "minLength": 1},
+    "report_revision": {"type": "integer", "minimum": 1},
+    "repository": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"},
+    "retracted_at": {"type": "string", "minLength": 1},
+    "schema_version": {"const": "1.0"},
+    "status": {"const": "WITHDRAWN"}
+  }
+}
