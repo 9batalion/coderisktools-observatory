@@ -70,13 +70,24 @@ class PublishStagingTests(unittest.TestCase):
             reports_repo = root / "reports"
             reports_repo.mkdir()
             bundle = make_bundle(root)
+            snapshot = root / "origin-snapshot"; snapshot.mkdir()
             git_outputs = iter(["", "", "", "", "", "abc123", "", "git@github.com:9batalion/coderisktools-observatory-reports.git"])
             gh_result = subprocess.CompletedProcess(["gh"], 0, "https://github.com/9batalion/coderisktools-observatory-reports/pull/99\n", "")
-            with mock.patch("observatory.publishing.pr._run_git", side_effect=lambda *args: next(git_outputs)), mock.patch("observatory.publishing.pr.subprocess.run", return_value=gh_result):
+            with mock.patch("observatory.publishing.pr._run_git", side_effect=lambda *args: next(git_outputs)), mock.patch("observatory.publishing.pr._origin_snapshot", return_value=snapshot), mock.patch("observatory.publishing.pr.subprocess.run", return_value=gh_result):
                 result = create_publication_pr(reports_repo, bundle, revision=3, branch="publish/test-r3")
             self.assertEqual(result.url, "https://github.com/9batalion/coderisktools-observatory-reports/pull/99")
             self.assertEqual(result.commit, "abc123")
             self.assertTrue(result.plan.destination.exists())
+
+    def test_create_publication_pr_stops_on_immutability_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); reports_repo = root / "reports"; reports_repo.mkdir(); bundle = make_bundle(root)
+            snapshot = root / "origin-snapshot"; snapshot.mkdir()
+            outputs = iter(["", "", "", ""])
+            invalid = type("Invalid", (), {"valid": False, "errors": ["existing report changed"]})()
+            with mock.patch("observatory.publishing.pr._run_git", side_effect=lambda *args: next(outputs)), mock.patch("observatory.publishing.pr._origin_snapshot", return_value=snapshot), mock.patch("observatory.publishing.pr.verify_immutability", return_value=invalid):
+                with self.assertRaises(PublicationError):
+                    create_publication_pr(reports_repo, bundle, revision=4, branch="publish/test-r4")
 
     def test_publish_rejects_non_publish_decision_and_existing_revision(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -1,13 +1,17 @@
 """Safe local staging and PR creation for report-repository submissions."""
 
 from dataclasses import dataclass
+import io
 import json
 from pathlib import Path
 import shutil
 import subprocess
+import tarfile
+import tempfile
 from urllib.parse import urlsplit
 
 from observatory.verification.bundle import verify_bundle
+from observatory.publishing.immutability import verify_immutability
 
 
 class PublicationError(ValueError):
@@ -96,6 +100,18 @@ def _run_git(repo, *args):
     return subprocess.run(["git", *args], cwd=repo, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True).stdout.strip()
 
 
+def _origin_snapshot(repo):
+    result = subprocess.run(["git", "archive", "origin/main"], cwd=repo, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    snapshot = Path(tempfile.mkdtemp(prefix="observatory-origin-"))
+    try:
+        with tarfile.open(fileobj=io.BytesIO(result.stdout), mode="r:") as archive:
+            archive.extractall(snapshot)
+    except Exception:
+        shutil.rmtree(snapshot, ignore_errors=True)
+        raise
+    return snapshot
+
+
 def create_publication_pr(reports_repo, bundle, revision=1, branch=None, title=None, body=None, remote_repo=None):
     """Create a branch, commit the verified public bundle, push it, and open a GitHub PR."""
     repo = Path(reports_repo)
@@ -108,8 +124,15 @@ def create_publication_pr(reports_repo, bundle, revision=1, branch=None, title=N
         branch = f"publish/observatory-{revision}"
     _safe_slug(branch.replace("/", "-"))
     _run_git(repo, "switch", "-c", branch, "origin/main")
-    plan = prepare_publication(repo, bundle, revision)
-    relative_files = [str(path.relative_to(repo)) for path in plan.artifacts]
+    snapshot = _origin_snapshot(repo)
+    try:
+        plan = prepare_publication(repo, bundle, revision)
+        relative_files = [str(path.relative_to(repo)) for path in plan.artifacts]
+        immutability = verify_immutability(snapshot, repo, relative_files)
+        if not immutability.valid:
+            raise PublicationError("publication immutability gate failed: " + "; ".join(immutability.errors))
+    finally:
+        shutil.rmtree(snapshot, ignore_errors=True)
     _run_git(repo, "add", "--", *relative_files)
     commit_message = title or f"feat: publish Observatory report {plan.target_sha[:12]}"
     _run_git(repo, "commit", "-m", commit_message)
