@@ -62,6 +62,7 @@ class LocalRunnerTests(unittest.TestCase):
     def test_cli_help_exposes_scan_and_offline_options(self):
         completed = subprocess.run([sys.executable, "-m", "observatory", "--help"], env={"PYTHONPATH": "src"}, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
         self.assertIn("scan", completed.stdout)
+        self.assertIn("benchmark", completed.stdout)
         self.assertIn("--offline", completed.stdout)
 
 

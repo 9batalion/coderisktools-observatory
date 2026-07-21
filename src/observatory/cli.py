@@ -9,6 +9,7 @@ import sys
 import tempfile
 
 from observatory.adapters.secret_scanner import SecretScannerAdapter
+from observatory.benchmark import run_benchmark
 from observatory.acquisition.clone import acquire_repository
 from observatory.contracts import NormalizedFinding, PublicationDecision, ScanResult, Target
 from observatory.normalization.findings import normalize_scanner_findings
@@ -101,6 +102,12 @@ def build_parser():
     scan.add_argument("--ruleset-digest", required=True, help="SHA-256 digest of the scanner ruleset")
     scan.add_argument("--scanner-command", default="secret-scanner", help="Scanner executable and fixed arguments")
     scan.add_argument("--json", action="store_true", help="Print machine-readable result summary")
+    benchmark = subparsers.add_parser("benchmark", help="Run deterministic local scanner/policy benchmark")
+    benchmark.add_argument("--manifest", type=Path, default=Path("benchmark/manifest.json"))
+    benchmark.add_argument("--ruleset-digest", required=True)
+    benchmark.add_argument("--license-status", choices=["recognized", "unknown", "restricted"], default="recognized")
+    benchmark.add_argument("--scanner-command", default="secret-scanner")
+    benchmark.add_argument("--json", action="store_true")
     verify = subparsers.add_parser("verify", help="Verify report manifest, hashes and bundle paths")
     verify.add_argument("bundle", type=Path, help="Report bundle directory")
     verify.add_argument("--json", action="store_true", help="Print machine-readable verification result")
@@ -293,6 +300,17 @@ def main(argv=None):
         payload = asdict(target)
         print(json.dumps(payload, sort_keys=True) if args.json else f"ADDED: {target.target_id}@{target.resolved_sha}")
         return 0
+    if args.command == "benchmark":
+        try:
+            adapter = SecretScannerAdapter(shlex.split(args.scanner_command), args.ruleset_digest)
+            results = run_benchmark(args.manifest, adapter, args.ruleset_digest, args.license_status)
+        except Exception as exc:
+            if args.verbose:
+                print(f"observatory: benchmark failed: {type(exc).__name__}", file=sys.stderr)
+            return 3
+        payload = {"passed": all(item["passed"] for item in results), "case_count": len(results), "cases": results}
+        print(json.dumps(payload, ensure_ascii=False, sort_keys=True) if args.json else ("BENCHMARK PASS" if payload["passed"] else "BENCHMARK FAIL"))
+        return 0 if payload["passed"] else 2
     if args.command == "verify":
         result = verify_bundle(args.bundle)
         payload = {"valid": result.valid, "errors": result.errors, "checked_files": result.checked_files}
