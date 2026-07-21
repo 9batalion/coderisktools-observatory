@@ -15,6 +15,7 @@ from observatory.normalization.findings import normalize_scanner_findings
 from observatory.policy.engine import evaluate_publication
 from observatory.reporting.builder import ReportModel, build_report_bundle
 from observatory.reporting.runner import run_pipeline
+from observatory.publishing.immutability import verify_immutability
 from observatory.publishing.pr import create_publication_pr, prepare_publication
 from observatory.publishing.retract import create_retraction_pr, prepare_retraction
 from observatory.target_registry import add_target
@@ -70,6 +71,11 @@ def build_parser():
     retract.add_argument("--title")
     retract.add_argument("--body")
     retract.add_argument("--remote-repo")
+    immutability = subparsers.add_parser("verify-immutability", help="Verify report-tree immutability")
+    immutability.add_argument("--base", type=Path, required=True)
+    immutability.add_argument("--candidate", type=Path, required=True)
+    immutability.add_argument("--paths", type=Path, required=True, help="Newline-separated changed report paths")
+    immutability.add_argument("--json", action="store_true")
     target = subparsers.add_parser("target", help="Manage the append-only target registry")
     target_commands = target.add_subparsers(dest="target_command", required=True)
     target_add = target_commands.add_parser("add", help="Record an exact-SHA target")
@@ -99,6 +105,15 @@ def build_parser():
 def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.command == "verify-immutability":
+        try:
+            raw_paths = args.paths.read_text(encoding="utf-8").splitlines()
+            result = verify_immutability(args.base, args.candidate, raw_paths)
+        except Exception as exc:
+            result = type("Result", (), {"valid": False, "errors": [str(exc)], "checked_paths": 0})()
+        payload = {"valid": result.valid, "errors": result.errors, "checked_paths": result.checked_paths}
+        print(json.dumps(payload, sort_keys=True) if args.json else ("VALID" if result.valid else "INVALID"))
+        return 0 if result.valid else 2
     if args.command == "retract":
         try:
             if args.create_pr:
