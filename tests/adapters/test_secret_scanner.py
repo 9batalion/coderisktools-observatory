@@ -56,6 +56,13 @@ class SecretScannerAdapterTests(unittest.TestCase):
         with self.assertRaises(AdapterError):
             SecretScannerAdapter(command, DIGEST).scan("/tmp/target", SHA)
 
+    def test_relativizes_only_paths_inside_target(self):
+        with tempfile.TemporaryDirectory() as target:
+            findings = [{"file": str(Path(target) / "config.env")}, {"file": "/outside/config.env"}]
+            normalized = SecretScannerAdapter._relative_finding_paths(findings, target)
+        self.assertEqual(normalized[0]["file"], "config.env")
+        self.assertEqual(normalized[1]["file"], "/outside/config.env")
+
     def test_real_scanner_empty_directory_smoke(self):
         if shutil.which("secret-scanner") is None:
             self.skipTest("optional local secret-scanner CLI is not installed")

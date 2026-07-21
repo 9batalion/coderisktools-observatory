@@ -3,6 +3,7 @@
 import json
 import re
 import subprocess
+from pathlib import Path
 
 from observatory.contracts import ScanResult
 
@@ -50,6 +51,23 @@ class SecretScannerAdapter:
     def capabilities(self):
         return {"directory": True, "offline": True, "json": True, "target_execution": False}
 
+    @staticmethod
+    def _relative_finding_paths(findings, target_path):
+        root = Path(target_path)
+        normalized = []
+        for finding in findings:
+            if not isinstance(finding, dict) or not isinstance(finding.get("file"), str):
+                normalized.append(finding)
+                continue
+            candidate = Path(finding["file"])
+            if candidate.is_absolute():
+                try:
+                    finding = dict(finding)
+                    finding["file"] = candidate.relative_to(root).as_posix()
+                except ValueError:
+                    pass
+            normalized.append(finding)
+        return normalized
     def scan(self, target_path, target_sha):
         scanner_version: str = self.version()
         command = [
@@ -93,7 +111,7 @@ class SecretScannerAdapter:
             self.ruleset_digest,
             target_sha,
             "complete",
-            list(payload["findings"]),
+            self._relative_finding_paths(payload["findings"], target_path),
             [],
             warnings,
         )
