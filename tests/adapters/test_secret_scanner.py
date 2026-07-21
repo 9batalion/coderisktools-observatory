@@ -24,6 +24,12 @@ class SecretScannerAdapterTests(unittest.TestCase):
         )
         return [sys.executable, str(path)]
 
+    def test_rejects_non_hex_ruleset_digest(self):
+        with self.assertRaises(AdapterError):
+            SecretScannerAdapter(["secret-scanner"], "sha256:" + "g" * 64)
+        with self.assertRaises(AdapterError):
+            SecretScannerAdapter(["secret-scanner"], "SHA256:" + "e" * 64)
+
     def test_maps_clean_json_to_complete_scan_result(self):
         command = self._fake({"findings": [], "config_changes": []})
         result = SecretScannerAdapter(command, DIGEST).scan("/tmp/target", SHA)

@@ -1,6 +1,7 @@
 """Adapter for the local OSS CodeRiskTools Secret Scanner CLI."""
 
 import json
+import re
 import subprocess
 
 from observatory.contracts import ScanResult
@@ -18,7 +19,7 @@ class SecretScannerAdapter:
         self.ruleset_digest = ruleset_digest
         self.timeout_seconds = timeout_seconds
         self.max_output_bytes = max_output_bytes
-        if not isinstance(ruleset_digest, str) or not ruleset_digest.startswith("sha256:") or len(ruleset_digest) != 71:
+        if not isinstance(ruleset_digest, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", ruleset_digest):
             raise AdapterError("a ruleset digest is required; adapter will not invent provenance")
 
     def is_available(self):
