@@ -36,6 +36,55 @@
         "finding_count": 1,
         "decision": "HOLD"
       }
+    },
+    {
+      "id": "placeholder-negative",
+      "ground_truth": "negative",
+      "files": [
+        {
+          "path": "config.env",
+          "content": "AWS_ACCESS_KEY_ID=not-a-real-key\nAWS_SECRET_ACCESS_KEY=placeholder\n"
+        }
+      ],
+      "expected": {
+        "scan_status": "complete",
+        "finding_count": 0,
+        "decision": "PUBLISH"
+      }
+    },
+    {
+      "id": "nested-synthetic-secret",
+      "ground_truth": "positive",
+      "files": [
+        {
+          "path": "nested/config/credentials.env",
+          "content_parts": [
+            "AWS_ACCESS_KEY_ID=",
+            "AKIAIOSFODNN7EX",
+            "AMPLE\n"
+          ]
+        }
+      ],
+      "expected": {
+        "scan_status": "complete",
+        "finding_count": 1,
+        "decision": "HOLD"
+      }
+    },
+    {
+      "id": "env-reference-negative",
+      "ground_truth": "negative",
+      "files": [
+        {
+          "path": "app/config.yaml",
+          "content": "credentials:\n  access_key: ${AWS_ACCESS_KEY_ID}\n  secret_key: ${AWS_SECRET_ACCESS_KEY}\n"
+        }
+      ],
+      "expected": {
+        "scan_status": "complete",
+        "finding_count": 0,
+        "decision": "PUBLISH"
+      }
     }
   ]
 }
