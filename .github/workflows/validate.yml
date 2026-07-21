@@ -17,6 +17,18 @@ jobs:
         run: python3 -m unittest discover -s tests -v
       - name: Compile Python
         run: python3 -m py_compile src/observatory/*.py tests/**/*.py
+      - name: Validate benchmark contract
+        run: |
+          PYTHONPATH=src python3 - <<'PY'
+          from observatory.benchmark import load_manifest
+          manifest = load_manifest('benchmark/manifest.json')
+          assert manifest['quality']['min_precision'] >= 0
+          assert manifest['quality']['min_recall'] >= 0
+          assert manifest['quality']['min_f1'] >= 0
+          assert manifest['performance']['max_total_duration_ms'] > 0
+          assert all(case.get('ground_truth') in {'positive', 'negative'} for case in manifest['cases'])
+          print(f"benchmark contract: PASS ({len(manifest['cases'])} cases)")
+          PY
       - name: Check action pins
         run: |
           python3 - <<'PY'
