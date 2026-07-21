@@ -8,6 +8,9 @@ import subprocess
 from urllib.parse import urlsplit
 
 from observatory.publishing.pr import PublicationError, _run_git, _safe_slug
+from observatory.verification.schema import SchemaValidationError, validate
+
+_SCHEMA_PATH = Path(__file__).resolve().parents[3] / "schemas" / "retraction.schema.json"
 
 
 @dataclass(frozen=True)
@@ -84,6 +87,11 @@ def prepare_retraction(reports_repo, repository_url, target_sha, revision=1, rea
         "schema_version": "1.0",
         "status": "WITHDRAWN",
     }
+    try:
+        schema = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
+        validate(payload, schema)
+    except (OSError, json.JSONDecodeError, SchemaValidationError) as exc:
+        raise PublicationError("retraction payload failed schema validation") from exc
     temporary = path.with_name(path.name + ".tmp")
     temporary.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
     temporary.replace(path)
