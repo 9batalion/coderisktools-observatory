@@ -10,9 +10,10 @@ import tempfile
 
 from observatory.adapters.secret_scanner import SecretScannerAdapter
 from observatory.acquisition.clone import acquire_repository
-from observatory.contracts import NormalizedFinding, ScanResult, Target
+from observatory.contracts import NormalizedFinding, PublicationDecision, ScanResult, Target
 from observatory.normalization.findings import normalize_scanner_findings
 from observatory.policy.engine import evaluate_publication
+from observatory.reporting.builder import ReportModel, build_report_bundle
 from observatory.reporting.runner import run_pipeline
 from observatory.target_registry import add_target
 from observatory.verification.bundle import verify_bundle
@@ -38,6 +39,14 @@ def build_parser():
     decide.add_argument("--findings", type=Path, required=True)
     decide.add_argument("--license-status", choices=["recognized", "unknown", "restricted"], required=True)
     decide.add_argument("--output", type=Path, required=True)
+    report = subparsers.add_parser("report", help="Build a deterministic report bundle")
+    report.add_argument("--target", type=Path, required=True)
+    report.add_argument("--scan", type=Path, required=True)
+    report.add_argument("--findings", type=Path, required=True)
+    report.add_argument("--decision", type=Path, required=True)
+    report.add_argument("--repository-name", required=True)
+    report.add_argument("--output-dir", type=Path, required=True)
+    report.add_argument("--limitation", action="append", default=[])
     target = subparsers.add_parser("target", help="Manage the append-only target registry")
     target_commands = target.add_subparsers(dest="target_command", required=True)
     target_add = target_commands.add_parser("add", help="Record an exact-SHA target")
@@ -67,6 +76,34 @@ def build_parser():
 def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.command == "report":
+        try:
+            inputs = (args.target, args.scan, args.findings, args.decision)
+            if any(path.stat().st_size > 5 * 1024 * 1024 for path in inputs):
+                raise ValueError("report input limit exceeded")
+            target = Target.from_dict(json.loads(args.target.read_text(encoding="utf-8")))
+            scan = ScanResult.from_dict(json.loads(args.scan.read_text(encoding="utf-8")))
+            raw_findings = json.loads(args.findings.read_text(encoding="utf-8"))
+            if not isinstance(raw_findings, list):
+                raise ValueError("findings JSON must be an array")
+            findings = [NormalizedFinding.from_dict(item) for item in raw_findings]
+            decision = PublicationDecision.from_dict(json.loads(args.decision.read_text(encoding="utf-8")))
+            if target.resolved_sha != scan.target_sha:
+                raise ValueError("target SHA does not match scan SHA")
+            if any(item.location["commit"] != target.resolved_sha for item in findings):
+                raise ValueError("finding SHA does not match target SHA")
+            limitations = args.limitation or [
+                "The report pipeline does not execute analyzed repository code.",
+                "A clean result is evidence, not certification.",
+            ]
+            model = ReportModel(target, scan, findings, decision, limitations)
+            artifacts = build_report_bundle(model, args.output_dir, args.repository_name)
+        except Exception as exc:
+            if args.verbose:
+                print(f"observatory: report failed: {type(exc).__name__}", file=sys.stderr)
+            return 3
+        print(json.dumps({"output_dir": str(args.output_dir), "artifacts": [path.name for path in artifacts]}, sort_keys=True))
+        return 0
     if args.command == "decide":
         temporary = args.output.with_name(args.output.name + ".tmp")
         try:
