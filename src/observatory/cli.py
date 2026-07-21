@@ -18,6 +18,7 @@ from observatory.policy.engine import evaluate_publication
 from observatory.reporting.builder import ReportModel, build_report_bundle
 from observatory.reporting.runner import run_pipeline
 from observatory.self_scan import run_self_scan
+from observatory.status import build_status, write_status_page
 from observatory.publishing.immutability import verify_immutability
 from observatory.publishing.pr import create_publication_pr, prepare_publication
 from observatory.publishing.retract import create_retraction_pr, prepare_retraction
@@ -115,6 +116,20 @@ def build_parser():
     self_scan.add_argument("--ruleset-digest", required=True)
     self_scan.add_argument("--scanner-command", default="secret-scanner")
     self_scan.add_argument("--json", action="store_true")
+    status = subparsers.add_parser("status", help="Build a privacy-safe static status page")
+    status.add_argument("--output-dir", type=Path, required=True)
+    status.add_argument("--generated-at", required=True)
+    status.add_argument("--build-sha", required=True)
+    status.add_argument("--last-publication")
+    status.add_argument("--reports", type=int, default=0)
+    status.add_argument("--digests", type=int, default=0)
+    status.add_argument("--retractions", type=int, default=0)
+    status.add_argument("--partial-scans", type=int, default=0)
+    status.add_argument("--feed-status", choices=["healthy", "degraded", "unknown"], default="unknown")
+    status.add_argument("--self-scan-decision", choices=["PUBLISH", "HOLD", "REJECT"], required=True)
+    status.add_argument("--self-scan-findings", type=int, default=0)
+    status.add_argument("--benchmark-passed", action="store_true")
+    status.add_argument("--json", action="store_true")
     verify = subparsers.add_parser("verify", help="Verify report manifest, hashes and bundle paths")
     verify.add_argument("bundle", type=Path, help="Report bundle directory")
     verify.add_argument("--json", action="store_true", help="Print machine-readable verification result")
@@ -317,6 +332,29 @@ def main(argv=None):
             return 3
         print(json.dumps(payload, ensure_ascii=False, sort_keys=True) if args.json else f"{payload['decision']}: {payload['finding_count']} findings")
         return 0 if payload["decision"] == "PUBLISH" else 2
+    if args.command == "status":
+        try:
+            status = build_status(
+                generated_at=args.generated_at,
+                build_sha=args.build_sha,
+                last_publication=args.last_publication,
+                reports=args.reports,
+                digests=args.digests,
+                retractions=args.retractions,
+                partial_scans=args.partial_scans,
+                feed_status=args.feed_status,
+                self_scan_decision=args.self_scan_decision,
+                self_scan_findings=args.self_scan_findings,
+                benchmark_passed=args.benchmark_passed,
+            )
+            paths = write_status_page(args.output_dir, status)
+        except Exception as exc:
+            if args.verbose:
+                print(f"observatory: status build failed: {type(exc).__name__}", file=sys.stderr)
+            return 3
+        payload = {"written": True, "status": status, "paths": list(paths)}
+        print(json.dumps(payload, ensure_ascii=False, sort_keys=True) if args.json else f"STATUS: {paths[0]}")
+        return 0
     if args.command == "benchmark":
         try:
             manifest = load_manifest(args.manifest)

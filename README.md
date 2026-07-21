@@ -61,6 +61,27 @@ A clean self-scan returns exit `0`. Findings or scan errors return `2`; missing 
 
 CI checks out the scanner source at an exact commit, installs that pinned checkout, derives a canonical SHA-256 digest from the scanner's built-in declarative rules, and runs both the real benchmark and self-scan with that digest. The ruleset digest is therefore distinct from the scanner source/artifact SHA and is not a placeholder.
 
+## Static status page
+
+A privacy-safe status artifact can be generated without reading private operator data:
+
+```bash
+PYTHONPATH=src python3 -m observatory status \
+  --output-dir public/status \
+  --generated-at 2026-07-21T08:00:00Z \
+  --build-sha <full-commit-sha> \
+  --reports 0 \
+  --digests 0 \
+  --retractions 0 \
+  --partial-scans 0 \
+  --feed-status healthy \
+  --self-scan-decision PUBLISH \
+  --self-scan-findings 0 \
+  --benchmark-passed
+```
+
+The command writes only aggregate `status.json` and static `index.html`; it does not publish findings, operator identity, raw scanner output or repository-private data.
+
 ## Local development
 
 ```bash
