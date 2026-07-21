@@ -16,6 +16,7 @@ from observatory.policy.engine import evaluate_publication
 from observatory.reporting.builder import ReportModel, build_report_bundle
 from observatory.reporting.runner import run_pipeline
 from observatory.publishing.pr import create_publication_pr, prepare_publication
+from observatory.publishing.retract import create_retraction_pr, prepare_retraction
 from observatory.target_registry import add_target
 from observatory.verification.bundle import verify_bundle
 
@@ -57,6 +58,18 @@ def build_parser():
     publish.add_argument("--title", help="PR title and commit message")
     publish.add_argument("--body", help="PR body")
     publish.add_argument("--remote-repo", help="GitHub owner/repository override")
+    retract = subparsers.add_parser("retract", help="Create a fail-closed report retraction record")
+    retract.add_argument("--reports-repo", type=Path, required=True)
+    retract.add_argument("--repository-url", required=True)
+    retract.add_argument("--sha", required=True)
+    retract.add_argument("--revision", type=int, default=1)
+    retract.add_argument("--reason", required=True)
+    retract.add_argument("--timestamp")
+    retract.add_argument("--create-pr", action="store_true")
+    retract.add_argument("--branch")
+    retract.add_argument("--title")
+    retract.add_argument("--body")
+    retract.add_argument("--remote-repo")
     target = subparsers.add_parser("target", help="Manage the append-only target registry")
     target_commands = target.add_subparsers(dest="target_command", required=True)
     target_add = target_commands.add_parser("add", help="Record an exact-SHA target")
@@ -86,6 +99,34 @@ def build_parser():
 def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.command == "retract":
+        try:
+            if args.create_pr:
+                result = create_retraction_pr(
+                    args.reports_repo, args.repository_url, args.sha, args.revision,
+                    args.reason, args.timestamp, args.branch, args.title, args.body, args.remote_repo,
+                )
+                print(json.dumps({
+                    "created": True, "url": result.url, "branch": result.branch,
+                    "commit": result.commit, "path": str(result.plan.path),
+                    "target_sha": result.plan.target_sha, "revision": result.plan.revision,
+                    "retracted_at": result.plan.retracted_at,
+                }, sort_keys=True))
+                return 0
+            plan = prepare_retraction(
+                args.reports_repo, args.repository_url, args.sha, args.revision,
+                args.reason, args.timestamp,
+            )
+        except Exception as exc:
+            if args.verbose:
+                print(f"observatory: retraction failed: {type(exc).__name__}", file=sys.stderr)
+            return 3
+        print(json.dumps({
+            "staged": True, "path": str(plan.path), "target_sha": plan.target_sha,
+            "repository_url": plan.repository_url, "revision": plan.revision,
+            "retracted_at": plan.retracted_at,
+        }, sort_keys=True))
+        return 0
     if args.command == "publish-pr":
         try:
             if args.create_pr:
