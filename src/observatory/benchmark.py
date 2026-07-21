@@ -41,9 +41,10 @@ def _load_json(path):
 
 def load_manifest(path):
     data = _load_json(Path(path))
-    if not isinstance(data, dict) or set(data) - {"schema_version", "benchmark_version", "cases", "quality"} or not {"schema_version", "benchmark_version", "cases"}.issubset(data):
+    if not isinstance(data, dict) or set(data) - {"schema_version", "benchmark_version", "cases", "quality", "performance"} or not {"schema_version", "benchmark_version", "cases"}.issubset(data):
         raise BenchmarkError("benchmark manifest fields are invalid")
     quality = _validate_quality(data.get("quality"))
+    performance = _validate_performance(data.get("performance"))
     if data["schema_version"] != 1 or not isinstance(data["benchmark_version"], str) or not data["benchmark_version"]:
         raise BenchmarkError("benchmark manifest version is invalid")
     cases = data["cases"]
@@ -91,15 +92,20 @@ def load_manifest(path):
         if expected["decision"] not in {"PUBLISH", "HOLD", "REDACT", "REJECT"}:
             raise BenchmarkError("benchmark expected decision is invalid")
     data["quality"] = quality
+    data["performance"] = performance
     return data
 
 
 def _materialize(case, root):
+    total_bytes = 0
     for item in case["files"]:
         path = root / _safe_path(item["path"])
         path.parent.mkdir(parents=True, exist_ok=True)
         content = item.get("content", "".join(item.get("content_parts", [])))
-        path.write_text(content, encoding="utf-8")
+        encoded = content.encode("utf-8")
+        path.write_bytes(encoded)
+        total_bytes += len(encoded)
+    return total_bytes
 
 def _validate_quality(quality):
     if quality is None:
@@ -109,6 +115,34 @@ def _validate_quality(quality):
     if any(not isinstance(value, (int, float)) or isinstance(value, bool) or not 0 <= value <= 1 for value in quality.values()):
         raise BenchmarkError("benchmark quality thresholds must be between 0 and 1")
     return {key: float(value) for key, value in quality.items()}
+
+
+def _validate_performance(performance):
+    if performance is None:
+        return {"max_total_duration_ms": 0.0}
+    if not isinstance(performance, dict) or set(performance) != {"max_total_duration_ms"}:
+        raise BenchmarkError("benchmark performance baseline is invalid")
+    value = performance["max_total_duration_ms"]
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0 or value > 600000:
+        raise BenchmarkError("benchmark maximum duration is invalid")
+    return {"max_total_duration_ms": float(value)}
+
+
+def calculate_performance(elapsed_ms, performance=None):
+    baseline = _validate_performance(performance)
+    elapsed = round(float(elapsed_ms), 3)
+    maximum = baseline["max_total_duration_ms"]
+    return {
+        "elapsed_ms": elapsed,
+        "max_total_duration_ms": maximum,
+        "performance_passed": maximum == 0.0 or elapsed <= maximum,
+    }
+
+
+def benchmark_result_digest(results):
+    canonical = json.dumps(results, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return "sha256:" + sha256(canonical).hexdigest()
+
 
 
 def calculate_metrics(results, quality=None):
@@ -149,7 +183,7 @@ def run_benchmark(manifest_path, adapter, ruleset_digest, license_status="recogn
         target_sha = sha256(("observatory-benchmark:" + case["id"]).encode("utf-8")).hexdigest()[:40]
         with tempfile.TemporaryDirectory(prefix="observatory-benchmark-") as directory:
             root = Path(directory)
-            _materialize(case, root)
+            fixture_bytes = _materialize(case, root)
             scan = adapter.scan(root, target_sha)
             if scan.ruleset_digest != ruleset_digest:
                 raise BenchmarkError("benchmark scanner ruleset digest mismatch")
@@ -167,6 +201,7 @@ def run_benchmark(manifest_path, adapter, ruleset_digest, license_status="recogn
         passed = actual == expected
         results.append({
             "case_id": case["id"], "passed": passed,
+            "fixture_bytes": fixture_bytes,
             **({"ground_truth": case["ground_truth"]} if "ground_truth" in case else {}),
             **actual, "expected": expected,
             "errors": list(scan.errors), "reason_codes": list(decision.reason_codes),

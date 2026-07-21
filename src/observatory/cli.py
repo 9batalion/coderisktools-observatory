@@ -7,9 +7,10 @@ from pathlib import Path
 import shlex
 import sys
 import tempfile
+import time
 
 from observatory.adapters.secret_scanner import SecretScannerAdapter
-from observatory.benchmark import calculate_metrics, load_manifest, run_benchmark
+from observatory.benchmark import benchmark_result_digest, calculate_metrics, calculate_performance, load_manifest, run_benchmark
 from observatory.acquisition.clone import acquire_repository
 from observatory.contracts import NormalizedFinding, PublicationDecision, ScanResult, Target
 from observatory.normalization.findings import normalize_scanner_findings
@@ -318,15 +319,18 @@ def main(argv=None):
         return 0 if payload["decision"] == "PUBLISH" else 2
     if args.command == "benchmark":
         try:
+            manifest = load_manifest(args.manifest)
+            started = time.perf_counter()
             adapter = SecretScannerAdapter(shlex.split(args.scanner_command), args.ruleset_digest)
             results = run_benchmark(args.manifest, adapter, args.ruleset_digest, args.license_status)
-            manifest = load_manifest(args.manifest)
+            elapsed_ms = (time.perf_counter() - started) * 1000
             metrics = calculate_metrics(results, manifest.get("quality"))
+            performance = calculate_performance(elapsed_ms, manifest.get("performance"))
         except Exception as exc:
             if args.verbose:
                 print(f"observatory: benchmark failed: {type(exc).__name__}", file=sys.stderr)
             return 3
-        payload = {"passed": all(item["passed"] for item in results) and metrics["quality_passed"], "case_count": len(results), "cases": results, "metrics": metrics}
+        payload = {"passed": all(item["passed"] for item in results) and metrics["quality_passed"] and performance["performance_passed"], "case_count": len(results), "cases": results, "metrics": metrics, "performance": performance, "result_digest": benchmark_result_digest(results)}
         print(json.dumps(payload, ensure_ascii=False, sort_keys=True) if args.json else ("BENCHMARK PASS" if payload["passed"] else "BENCHMARK FAIL"))
         return 0 if payload["passed"] else 2
     if args.command == "verify":

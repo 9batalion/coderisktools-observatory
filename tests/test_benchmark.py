@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parents[1] / "src"))
 
-from observatory.benchmark import BenchmarkError, calculate_metrics, load_manifest, run_benchmark
+from observatory.benchmark import BenchmarkError, benchmark_result_digest, calculate_metrics, calculate_performance, load_manifest, run_benchmark
 from observatory.contracts import ScanResult
 
 DIGEST = "sha256:" + "a" * 64
@@ -68,6 +68,11 @@ class BenchmarkTests(unittest.TestCase):
         self.assertEqual(metrics["f1"], 0.5)
         self.assertTrue(metrics["quality_passed"])
 
+    def test_performance_gate_and_result_digest_are_stable(self):
+        results = [{"case_id": "clean", "finding_count": 0, "ground_truth": "negative"}]
+        self.assertEqual(benchmark_result_digest(results), benchmark_result_digest(results))
+        self.assertTrue(calculate_performance(12.5, {"max_total_duration_ms": 100})["performance_passed"])
+        self.assertFalse(calculate_performance(101, {"max_total_duration_ms": 100})["performance_passed"])
     def test_calculate_metrics_fails_quality_threshold(self):
         results = [{"ground_truth": "positive", "finding_count": 0}]
         metrics = calculate_metrics(results, {"min_precision": 1.0, "min_recall": 1.0, "min_f1": 1.0})
