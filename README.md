@@ -40,6 +40,8 @@ PYTHONPATH=src python3 -m observatory benchmark \
 
 Exit codes are `0` when every case matches, `2` when a case mismatches, and `3` for an invalid manifest or runtime error. The positive fixture is assembled only in a temporary directory from split parts; raw secret material is not stored in the repository. The benchmark output contains statuses, counts, decisions and reason codes, never raw evidence.
 
+The manifest also records binary `ground_truth` labels and minimum quality thresholds. The JSON result includes `TP`, `TN`, `FP`, `FN`, precision, recall and F1; a threshold failure makes the benchmark exit `2`.
+
 ## Self-scan
 
 Scan the Observatory checkout at its exact Git `HEAD` without printing raw findings:

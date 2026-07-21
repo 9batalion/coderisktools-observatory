@@ -9,7 +9,7 @@ import sys
 import tempfile
 
 from observatory.adapters.secret_scanner import SecretScannerAdapter
-from observatory.benchmark import run_benchmark
+from observatory.benchmark import calculate_metrics, load_manifest, run_benchmark
 from observatory.acquisition.clone import acquire_repository
 from observatory.contracts import NormalizedFinding, PublicationDecision, ScanResult, Target
 from observatory.normalization.findings import normalize_scanner_findings
@@ -320,11 +320,13 @@ def main(argv=None):
         try:
             adapter = SecretScannerAdapter(shlex.split(args.scanner_command), args.ruleset_digest)
             results = run_benchmark(args.manifest, adapter, args.ruleset_digest, args.license_status)
+            manifest = load_manifest(args.manifest)
+            metrics = calculate_metrics(results, manifest.get("quality"))
         except Exception as exc:
             if args.verbose:
                 print(f"observatory: benchmark failed: {type(exc).__name__}", file=sys.stderr)
             return 3
-        payload = {"passed": all(item["passed"] for item in results), "case_count": len(results), "cases": results}
+        payload = {"passed": all(item["passed"] for item in results) and metrics["quality_passed"], "case_count": len(results), "cases": results, "metrics": metrics}
         print(json.dumps(payload, ensure_ascii=False, sort_keys=True) if args.json else ("BENCHMARK PASS" if payload["passed"] else "BENCHMARK FAIL"))
         return 0 if payload["passed"] else 2
     if args.command == "verify":

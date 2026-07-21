@@ -1,9 +1,15 @@
 {
   "schema_version": 1,
-  "benchmark_version": "0.1.0",
+  "benchmark_version": "0.2.0",
+  "quality": {
+    "min_precision": 1.0,
+    "min_recall": 1.0,
+    "min_f1": 1.0
+  },
   "cases": [
     {
       "id": "clean-empty",
+      "ground_truth": "negative",
       "files": [],
       "expected": {
         "scan_status": "complete",
@@ -13,6 +19,7 @@
     },
     {
       "id": "synthetic-secret",
+      "ground_truth": "positive",
       "files": [
         {
           "path": "config.env",

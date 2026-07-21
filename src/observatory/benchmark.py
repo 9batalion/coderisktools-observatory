@@ -41,8 +41,9 @@ def _load_json(path):
 
 def load_manifest(path):
     data = _load_json(Path(path))
-    if not isinstance(data, dict) or set(data) != {"schema_version", "benchmark_version", "cases"}:
+    if not isinstance(data, dict) or set(data) - {"schema_version", "benchmark_version", "cases", "quality"} or not {"schema_version", "benchmark_version", "cases"}.issubset(data):
         raise BenchmarkError("benchmark manifest fields are invalid")
+    quality = _validate_quality(data.get("quality"))
     if data["schema_version"] != 1 or not isinstance(data["benchmark_version"], str) or not data["benchmark_version"]:
         raise BenchmarkError("benchmark manifest version is invalid")
     cases = data["cases"]
@@ -50,7 +51,7 @@ def load_manifest(path):
         raise BenchmarkError("benchmark cases are invalid")
     seen = set()
     for case in cases:
-        if not isinstance(case, dict) or set(case) != {"id", "files", "expected"}:
+        if not isinstance(case, dict) or set(case) - {"id", "files", "expected", "ground_truth"} or not {"id", "files", "expected"}.issubset(case):
             raise BenchmarkError("benchmark case fields are invalid")
         case_id = case["id"]
         if not isinstance(case_id, str) or not _CASE_ID_RE.fullmatch(case_id) or case_id in seen:
@@ -78,6 +79,8 @@ def load_manifest(path):
             if len(content.encode("utf-8")) > _MAX_FILE_BYTES:
                 raise BenchmarkError("benchmark fixture is too large")
             file_paths.add(str(path_value))
+        if case.get("ground_truth") is not None and case["ground_truth"] not in {"positive", "negative"}:
+            raise BenchmarkError("benchmark ground truth is invalid")
         expected = case["expected"]
         if not isinstance(expected, dict) or set(expected) != {"scan_status", "finding_count", "decision"}:
             raise BenchmarkError("benchmark expected result fields are invalid")
@@ -87,6 +90,7 @@ def load_manifest(path):
             raise BenchmarkError("benchmark expected finding count is invalid")
         if expected["decision"] not in {"PUBLISH", "HOLD", "REDACT", "REJECT"}:
             raise BenchmarkError("benchmark expected decision is invalid")
+    data["quality"] = quality
     return data
 
 
@@ -96,6 +100,41 @@ def _materialize(case, root):
         path.parent.mkdir(parents=True, exist_ok=True)
         content = item.get("content", "".join(item.get("content_parts", [])))
         path.write_text(content, encoding="utf-8")
+
+def _validate_quality(quality):
+    if quality is None:
+        return {"min_precision": 0.0, "min_recall": 0.0, "min_f1": 0.0}
+    if not isinstance(quality, dict) or set(quality) != {"min_precision", "min_recall", "min_f1"}:
+        raise BenchmarkError("benchmark quality thresholds are invalid")
+    if any(not isinstance(value, (int, float)) or isinstance(value, bool) or not 0 <= value <= 1 for value in quality.values()):
+        raise BenchmarkError("benchmark quality thresholds must be between 0 and 1")
+    return {key: float(value) for key, value in quality.items()}
+
+
+def calculate_metrics(results, quality=None):
+    """Calculate deterministic binary detection metrics and apply thresholds."""
+    thresholds = _validate_quality(quality)
+    counts = {"tp": 0, "tn": 0, "fp": 0, "fn": 0}
+    for result in results:
+        truth = result.get("ground_truth")
+        if truth not in {"positive", "negative"}:
+            raise BenchmarkError("benchmark case ground truth is missing or invalid")
+        predicted = result.get("finding_count", 0) > 0
+        key = ("tp" if predicted else "fn") if truth == "positive" else ("fp" if predicted else "tn")
+        counts[key] += 1
+    precision = counts["tp"] / (counts["tp"] + counts["fp"]) if counts["tp"] + counts["fp"] else 1.0
+    recall = counts["tp"] / (counts["tp"] + counts["fn"]) if counts["tp"] + counts["fn"] else 1.0
+    f1 = (2 * precision * recall / (precision + recall)) if precision + recall else 0.0
+    metrics = {
+        "counts": counts,
+        "precision": round(precision, 6),
+        "recall": round(recall, 6),
+        "f1": round(f1, 6),
+        "thresholds": thresholds,
+    }
+    metrics["quality_passed"] = all(metrics[name] >= thresholds["min_" + name] for name in ("precision", "recall", "f1"))
+    return metrics
+
 
 
 def run_benchmark(manifest_path, adapter, ruleset_digest, license_status="recognized"):
@@ -128,6 +167,7 @@ def run_benchmark(manifest_path, adapter, ruleset_digest, license_status="recogn
         passed = actual == expected
         results.append({
             "case_id": case["id"], "passed": passed,
+            **({"ground_truth": case["ground_truth"]} if "ground_truth" in case else {}),
             **actual, "expected": expected,
             "errors": list(scan.errors), "reason_codes": list(decision.reason_codes),
         })
