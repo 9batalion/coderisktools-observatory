@@ -24,9 +24,14 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: wordpress-reports-hub-publication
+  cancel-in-progress: false
+
 jobs:
   publish:
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     environment:
       name: wordpress-publication
     permissions:
