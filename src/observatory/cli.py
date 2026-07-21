@@ -9,6 +9,7 @@ import sys
 import tempfile
 
 from observatory.adapters.secret_scanner import SecretScannerAdapter
+from observatory.acquisition.clone import acquire_repository
 from observatory.contracts import Target
 from observatory.reporting.runner import run_pipeline
 from observatory.target_registry import add_target
@@ -20,6 +21,11 @@ def build_parser():
     parser.add_argument("--offline", action="store_true", help="Reject network repository URLs")
     parser.add_argument("--verbose", action="store_true", help="Include diagnostic errors on stderr")
     subparsers = parser.add_subparsers(dest="command", required=True)
+    acquire = subparsers.add_parser("acquire", help="Acquire a repository at an exact SHA")
+    acquire.add_argument("--source", required=True)
+    acquire.add_argument("--sha", required=True)
+    acquire.add_argument("--workspace", type=Path, required=True)
+    acquire.add_argument("--json", action="store_true")
     target = subparsers.add_parser("target", help="Manage the append-only target registry")
     target_commands = target.add_subparsers(dest="target_command", required=True)
     target_add = target_commands.add_parser("add", help="Record an exact-SHA target")
@@ -49,6 +55,21 @@ def build_parser():
 def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.command == "acquire":
+        try:
+            result = acquire_repository(args.source, args.sha, args.workspace)
+        except Exception as exc:
+            if args.verbose:
+                print(f"observatory: {exc}", file=sys.stderr)
+            return 3
+        payload = {
+            "path": str(result.path),
+            "resolved_sha": result.resolved_sha,
+            "file_count": result.file_count,
+            "total_bytes": result.total_bytes,
+        }
+        print(json.dumps(payload, sort_keys=True) if args.json else f"ACQUIRED: {payload['resolved_sha']} -> {payload['path']}")
+        return 0
     if args.command == "target":
         if args.target_command != "add":
             parser.error("unsupported target command")
