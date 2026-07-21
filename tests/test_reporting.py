@@ -7,6 +7,7 @@ sys.path.insert(0, str(Path(__file__).parents[1] / "src"))
 import unittest
 
 from observatory.contracts import PublicationDecision, ScanResult, Target
+from observatory.verification.schema import validate_json_file
 from observatory.reporting.builder import ReportModel, build_report_bundle
 
 SHA = "3" * 40
@@ -34,6 +35,7 @@ class ReportBuilderTests(unittest.TestCase):
             self.assertIn("index.html", names)
             self.assertIn("manifest.json", names)
             self.assertIn("checksums.txt", names)
+            validate_json_file(Path(directory) / "report.json", Path(__file__).parents[1] / "schemas/report.schema.json")
             html = (Path(directory) / "index.html").read_text()
             self.assertNotIn("<script>alert", html)
             self.assertIn("&lt;script&gt;", html)

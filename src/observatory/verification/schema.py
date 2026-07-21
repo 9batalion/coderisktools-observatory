@@ -10,6 +10,8 @@ class SchemaValidationError(ValueError):
 
 
 def _type_matches(value, expected):
+    if isinstance(expected, list):
+        return any(_type_matches(value, item) for item in expected)
     if expected == "object": return isinstance(value, dict)
     if expected == "array": return isinstance(value, list)
     if expected == "string": return isinstance(value, str)
