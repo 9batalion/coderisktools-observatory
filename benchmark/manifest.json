@@ -6,6 +6,9 @@
     "min_recall": 1.0,
     "min_f1": 1.0
   },
+  "performance": {
+    "max_total_duration_ms": 10000
+  },
   "cases": [
     {
       "id": "clean-empty",

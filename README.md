@@ -42,6 +42,8 @@ Exit codes are `0` when every case matches, `2` when a case mismatches, and `3` 
 
 The manifest also records binary `ground_truth` labels and minimum quality thresholds. The JSON result includes `TP`, `TN`, `FP`, `FN`, precision, recall and F1; a threshold failure makes the benchmark exit `2`.
 
+The performance baseline records materialized fixture sizes, a canonical `result_digest`, and `max_total_duration_ms`. Runtime is measured separately from the digest, so timing variance does not create false content regressions; exceeding the baseline fails with exit `2`.
+
 ## Self-scan
 
 Scan the Observatory checkout at its exact Git `HEAD` without printing raw findings:
