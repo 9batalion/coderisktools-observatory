@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coderisktools.org/schemas/review-record.schema.json",
+  "title": "Observatory Review Record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["reviewer", "decision", "reason_codes", "target_sha", "manual_gate_required"],
+  "properties": {
+    "reviewer": {"type": "string", "minLength": 1},
+    "decision": {"enum": ["PUBLISH", "HOLD", "REDACT", "REJECT"]},
+    "reason_codes": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "target_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "manual_gate_required": {"type": "boolean"},
+    "comment": {"type": "string", "minLength": 1}
+  }
+}

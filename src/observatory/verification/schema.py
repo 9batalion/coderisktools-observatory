@@ -14,6 +14,7 @@ def _type_matches(value, expected):
     if expected == "array": return isinstance(value, list)
     if expected == "string": return isinstance(value, str)
     if expected == "boolean": return isinstance(value, bool)
+    if expected == "integer": return isinstance(value, int) and not isinstance(value, bool)
     if expected == "null": return value is None
     raise SchemaValidationError(f"unsupported schema type: {expected}")
 
@@ -29,6 +30,8 @@ def validate(value, schema, path="$", root=None):
     expected = schema.get("type")
     if expected and not _type_matches(value, expected):
         raise SchemaValidationError(f"{path}: expected {expected}")
+    if "minimum" in schema and value < schema["minimum"]:
+        raise SchemaValidationError(f"{path}: below minimum")
     if isinstance(value, dict):
         for name in schema.get("required", []):
             if name not in value:
