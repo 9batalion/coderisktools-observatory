@@ -57,6 +57,10 @@ PYTHONPATH=src python3 -m observatory self-scan \
 
 A clean self-scan returns exit `0`. Findings or scan errors return `2`; missing Git provenance, invalid configuration or scanner runtime errors return `3`. The output contains only provenance, status, counts, decisions, reason codes, errors and warnings.
 
+## CI scanner provenance
+
+CI checks out the scanner source at an exact commit, installs that pinned checkout, derives a canonical SHA-256 digest from the scanner's built-in declarative rules, and runs both the real benchmark and self-scan with that digest. The ruleset digest is therefore distinct from the scanner source/artifact SHA and is not a placeholder.
+
 ## Local development
 
 ```bash
