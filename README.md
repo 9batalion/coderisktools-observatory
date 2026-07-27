@@ -101,6 +101,8 @@ For a checked-out reports repository, use `--reports-repo <path>` instead of the
 
 The command writes only aggregate `status.json` and static `index.html`; it does not publish findings, operator identity, raw scanner output or repository-private data.
 
+When public report artifacts contain scanner findings, the status builder also emits a vulnerability ranking. The ranking is numeric only: repository, exact SHA, scan status and `critical`, `high`, `medium`, `low`, `unknown`, `total` counts. It deliberately omits file paths, line numbers, package URLs, fingerprints and raw evidence.
+
 ## Local development
 
 ```bash

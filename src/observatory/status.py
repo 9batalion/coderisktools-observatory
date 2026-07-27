@@ -9,6 +9,7 @@ from pathlib import Path
 
 _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 _TIME_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")
+_SEVERITIES = ("critical", "high", "medium", "low", "unknown")
 
 
 def _count(value, field):
@@ -23,9 +24,81 @@ def _timestamp(value, field):
     return value
 
 
+def _safe_text(value, field):
+    if not isinstance(value, str) or not value or "\x00" in value:
+        raise ValueError(f"{field} must be a non-empty safe string")
+    return value
+
+
+def _severity_counts(findings):
+    counts = {severity: 0 for severity in _SEVERITIES}
+    if not isinstance(findings, list):
+        return counts
+    for finding in findings:
+        severity = finding.get("severity") if isinstance(finding, dict) else None
+        severity = severity.lower() if isinstance(severity, str) else "unknown"
+        if severity not in counts:
+            severity = "unknown"
+        counts[severity] += 1
+    return counts
+
+
+def _ranking_row(data):
+    findings = data.get("findings") if isinstance(data, dict) else []
+    counts = _severity_counts(findings)
+    target = data.get("target") if isinstance(data.get("target"), dict) else {}
+    scan = data.get("scan") if isinstance(data.get("scan"), dict) else {}
+    repository = data.get("repository_name") or data.get("repository_url") or "unknown"
+    target_sha = target.get("resolved_sha") or scan.get("target_sha") or "0" * 40
+    if not isinstance(target_sha, str) or not _SHA_RE.fullmatch(target_sha):
+        target_sha = "0" * 40
+    total = sum(counts.values())
+    score = counts["critical"] * 1000 + counts["high"] * 100 + counts["medium"] * 10 + counts["low"]
+    return {
+        "repository": _safe_text(str(repository), "repository"),
+        "repository_url": data.get("repository_url") if isinstance(data.get("repository_url"), str) else "",
+        "target_sha": target_sha,
+        "scan_status": scan.get("status") if scan.get("status") in {"complete", "partial", "failed"} else "unknown",
+        "critical": counts["critical"],
+        "high": counts["high"],
+        "medium": counts["medium"],
+        "low": counts["low"],
+        "unknown": counts["unknown"],
+        "total": total,
+        "score": score,
+    }
+
+
+def _validate_ranking(ranking):
+    if ranking is None:
+        return []
+    if not isinstance(ranking, list):
+        raise ValueError("vulnerability_ranking must be a list")
+    cleaned = []
+    allowed = {"repository", "repository_url", "target_sha", "scan_status", "critical", "high", "medium", "low", "unknown", "total", "score"}
+    for row in ranking:
+        if not isinstance(row, dict) or set(row) != allowed:
+            raise ValueError("invalid vulnerability ranking row")
+        cleaned.append({
+            "repository": _safe_text(row["repository"], "repository"),
+            "repository_url": row["repository_url"] if isinstance(row["repository_url"], str) else "",
+            "target_sha": row["target_sha"] if isinstance(row["target_sha"], str) and _SHA_RE.fullmatch(row["target_sha"]) else "0" * 40,
+            "scan_status": row["scan_status"] if row["scan_status"] in {"complete", "partial", "failed", "unknown"} else "unknown",
+            "critical": _count(row["critical"], "critical"),
+            "high": _count(row["high"], "high"),
+            "medium": _count(row["medium"], "medium"),
+            "low": _count(row["low"], "low"),
+            "unknown": _count(row["unknown"], "unknown"),
+            "total": _count(row["total"], "total"),
+            "score": _count(row["score"], "score"),
+        })
+    return cleaned
+
+
 def build_status(*, generated_at, build_sha, last_publication, reports, digests,
                  retractions, partial_scans, feed_status, self_scan_decision,
-                 self_scan_findings, benchmark_passed, publication_scope="unknown"):
+                 self_scan_findings, benchmark_passed, publication_scope="unknown",
+                 vulnerability_ranking=None):
     if not isinstance(build_sha, str) or not _SHA_RE.fullmatch(build_sha):
         raise ValueError("build_sha must be a full lowercase commit SHA")
     _timestamp(generated_at, "generated_at")
@@ -56,6 +129,7 @@ def build_status(*, generated_at, build_sha, last_publication, reports, digests,
             "finding_count": _count(self_scan_findings, "self_scan_findings"),
         },
         "benchmark": {"passed": benchmark_passed},
+        "vulnerability_ranking": _validate_ranking(vulnerability_ranking),
     }
 
 
@@ -67,6 +141,7 @@ def summarize_reports_repository(root: Path):
     report_root = root / "public" / "reports" / "github"
     weekly_root = root / "public" / "weekly"
     reports = synthetic = real = partial = retractions = digests = 0
+    ranking = []
     if report_root.exists():
         if report_root.is_symlink() or not report_root.is_dir():
             raise ValueError("invalid public/reports/github root")
@@ -82,6 +157,9 @@ def summarize_reports_repository(root: Path):
                 real += 1
                 if isinstance(data.get("scan"), dict) and data["scan"].get("status") == "partial":
                     partial += 1
+                row = _ranking_row(data)
+                if row["total"] > 0:
+                    ranking.append(row)
             else:
                 synthetic += 1
         retractions = sum(1 for path in report_root.glob("*/*/*/*/retraction.json") if path.is_file() and not path.is_symlink())
@@ -90,7 +168,8 @@ def summarize_reports_repository(root: Path):
             raise ValueError("invalid public/weekly root")
         digests = sum(1 for path in weekly_root.glob("*/report.json") if path.is_file() and not path.is_symlink())
     scope = "empty" if reports == 0 else ("mixed" if synthetic and real else ("synthetic" if synthetic else "real"))
-    return {"reports": reports, "digests": digests, "retractions": retractions, "partial_scans": partial, "publication_scope": scope}
+    ranking.sort(key=lambda row: (-row["critical"], -row["high"], -row["medium"], -row["low"], -row["unknown"], row["repository"]))
+    return {"reports": reports, "digests": digests, "retractions": retractions, "partial_scans": partial, "publication_scope": scope, "vulnerability_ranking": ranking}
 
 
 def render_status_html(status):
@@ -111,15 +190,27 @@ def render_status_html(status):
         "self_scan_findings": self_scan["finding_count"],
         "benchmark": "PASS" if benchmark["passed"] else "FAIL",
     }
+    ranking_rows = []
+    for row in status.get("vulnerability_ranking", []):
+        ranking_rows.append(
+            "<tr>"
+            f"<td>{html.escape(row['repository'])}</td>"
+            f"<td><code>{html.escape(row['target_sha'][:12])}</code></td>"
+            f"<td>{html.escape(row['scan_status'])}</td>"
+            f"<td>{row['critical']}</td><td>{row['high']}</td><td>{row['medium']}</td>"
+            f"<td>{row['low']}</td><td>{row['unknown']}</td><td>{row['total']}</td>"
+            "</tr>"
+        )
+    ranking_html = "" if not ranking_rows else """<h2>Vulnerability ranking</h2><p>Numeric aggregate only; locations and raw evidence are not published.</p><table><thead><tr><th>Repository</th><th>SHA</th><th>Status</th><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th>Unknown</th><th>Total</th></tr></thead><tbody>{}</tbody></table>""".format("".join(ranking_rows))
     return """<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>Observatory status</title>
-<style>body{{font:16px system-ui,sans-serif;max-width:760px;margin:3rem auto;padding:0 1rem;color:#17202a}}main{{border:1px solid #d7dde3;border-radius:12px;padding:1.5rem}}dt{{font-weight:700;margin-top:.8rem}}dd{{margin:.15rem 0 0}}code{{font-size:.85em;overflow-wrap:anywhere}}</style></head>
+<style>body{{font:16px system-ui,sans-serif;max-width:960px;margin:3rem auto;padding:0 1rem;color:#17202a}}main{{border:1px solid #d7dde3;border-radius:12px;padding:1.5rem}}dt{{font-weight:700;margin-top:.8rem}}dd{{margin:.15rem 0 0}}code{{font-size:.85em;overflow-wrap:anywhere}}table{{border-collapse:collapse;width:100%;margin-top:1rem}}th,td{{border:1px solid #d7dde3;padding:.45rem;text-align:right}}th:first-child,td:first-child{{text-align:left}}</style></head>
 <body><main><h1>Observatory status</h1><dl>
 <dt>Generated</dt><dd>{generated_at}</dd><dt>Last build</dt><dd><code>{build_sha}</code></dd><dt>Last publication</dt><dd>{last_publication}</dd><dt>Publication scope</dt><dd>{publication_scope}</dd>
 <dt>Reports</dt><dd>{reports}</dd><dt>Digests</dt><dd>{digests}</dd><dt>Retractions</dt><dd>{retractions}</dd><dt>Partial scans</dt><dd>{partial_scans}</dd>
 <dt>Feeds</dt><dd>{feed_status}</dd><dt>Self-scan</dt><dd>{self_scan_decision} ({self_scan_findings} findings)</dd><dt>Benchmark</dt><dd>{benchmark}</dd>
-</dl></main></body></html>
-""".format(**values)
+</dl>{ranking_html}</main></body></html>
+""".format(ranking_html=ranking_html, **values)
 
 
 def write_status_page(output_dir: Path, status):

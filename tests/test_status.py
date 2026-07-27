@@ -24,9 +24,10 @@ class StatusTests(unittest.TestCase):
         self.assertEqual(status["counts"]["reports"], 4)
         self.assertNotIn("findings", status)
         self.assertNotIn("operator", status)
+        self.assertEqual(status["vulnerability_ranking"], [])
         self.assertEqual(set(status), {
             "schema_version", "generated_at", "last_build_sha", "last_publication",
-            "publication_scope", "counts", "feeds", "self_scan", "benchmark",
+            "publication_scope", "counts", "feeds", "self_scan", "benchmark", "vulnerability_ranking",
         })
 
     def test_rejects_invalid_counts_and_private_values(self):
@@ -64,8 +65,61 @@ class StatusTests(unittest.TestCase):
             (weekly / "report.json").write_text('{}', encoding="utf-8")
             self.assertEqual(summarize_reports_repository(root), {
                 "reports": 1, "digests": 1, "retractions": 1,
-                "partial_scans": 0, "publication_scope": "synthetic",
+                "partial_scans": 0, "publication_scope": "synthetic", "vulnerability_ranking": [],
             })
+
+    def test_summarizes_vulnerability_ranking_without_locations_or_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            alpha = root / "public/reports/github/acme/alpha" / ("a" * 40) / "r1"
+            beta = root / "public/reports/github/acme/beta" / ("b" * 40) / "r1"
+            alpha.mkdir(parents=True)
+            beta.mkdir(parents=True)
+            (alpha / "report.json").write_text(json.dumps({
+                "repository_name": "acme/alpha",
+                "repository_url": "https://github.com/acme/alpha",
+                "target": {"resolved_sha": "a" * 40},
+                "scan": {"status": "complete"},
+                "findings": [
+                    {"severity": "medium", "location": {"path": "secret/file.py"}, "evidence_refs": ["sha256:" + "1" * 64]},
+                    {"severity": "critical", "location": {"path": "hidden.py"}, "component_purl": "pkg:bitnami/demo@1.0.0"},
+                ],
+            }), encoding="utf-8")
+            (beta / "report.json").write_text(json.dumps({
+                "repository_name": "acme/beta",
+                "repository_url": "https://github.com/acme/beta",
+                "target": {"resolved_sha": "b" * 40},
+                "scan": {"status": "complete"},
+                "findings": [{"severity": "high"}, {"severity": "low"}, {"severity": "unknown"}],
+            }), encoding="utf-8")
+            summary = summarize_reports_repository(root)
+        ranking = summary["vulnerability_ranking"]
+        self.assertEqual([row["repository"] for row in ranking], ["acme/alpha", "acme/beta"])
+        self.assertEqual(ranking[0]["critical"], 1)
+        self.assertEqual(ranking[0]["medium"], 1)
+        self.assertEqual(ranking[0]["total"], 2)
+        encoded = json.dumps(ranking, sort_keys=True)
+        self.assertNotIn("secret/file.py", encoded)
+        self.assertNotIn("component_purl", encoded)
+        self.assertNotIn("evidence_refs", encoded)
+
+    def test_status_html_renders_numeric_ranking_only(self):
+        status = build_status(
+            generated_at="2026-07-21T08:00:00Z", build_sha="a" * 40,
+            last_publication=None, reports=1, digests=0, retractions=0,
+            partial_scans=0, feed_status="healthy", self_scan_decision="PUBLISH",
+            self_scan_findings=0, benchmark_passed=True,
+            vulnerability_ranking=[{
+                "repository": "acme/alpha", "repository_url": "https://github.com/acme/alpha",
+                "target_sha": "b" * 40, "scan_status": "complete", "critical": 1,
+                "high": 2, "medium": 3, "low": 4, "unknown": 5, "total": 15, "score": 1234,
+            }],
+        )
+        html = render_status_html(status)
+        self.assertIn("Vulnerability ranking", html)
+        self.assertIn("acme/alpha", html)
+        self.assertIn("Critical", html)
+        self.assertNotIn("finding", html.lower().split("vulnerability ranking", 1)[-1][:200])
 
     def test_write_status_page_is_deterministic(self):
         status = build_status(

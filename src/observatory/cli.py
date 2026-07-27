@@ -369,7 +369,7 @@ def main(argv=None):
             counts = summarize_reports_repository(args.reports_repo) if args.reports_repo else {
                 "reports": args.reports, "digests": args.digests,
                 "retractions": args.retractions, "partial_scans": args.partial_scans,
-                "publication_scope": "unknown",
+                "publication_scope": "unknown", "vulnerability_ranking": [],
             }
             status = build_status(
                 generated_at=args.generated_at,
@@ -384,6 +384,7 @@ def main(argv=None):
                 self_scan_findings=args.self_scan_findings,
                 benchmark_passed=args.benchmark_passed,
                 publication_scope=counts["publication_scope"],
+                vulnerability_ranking=counts["vulnerability_ranking"],
             )
             paths = write_status_page(args.output_dir, status)
         except Exception as exc:
