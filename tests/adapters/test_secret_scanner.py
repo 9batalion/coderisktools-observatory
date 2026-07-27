@@ -94,6 +94,37 @@ class SecretScannerAdapterTests(unittest.TestCase):
         self.assertEqual(normalized[0]["file"], "config.env")
         self.assertEqual(normalized[1]["file"], "/outside/config.env")
 
+    def test_scans_local_sbom_with_vulnerability_cli(self):
+        script = Path(tempfile.mkdtemp()) / "fake-scanner.py"
+        script.write_text(
+            "import json, sys\n"
+            "if '--version' in sys.argv:\n"
+            " print('secret-scanner 3.1.1')\n"
+            " sys.exit(0)\n"
+            "assert sys.argv[1:4] == ['vuln', 'scan', '--sbom'], sys.argv\n"
+            "assert '--database' in sys.argv, sys.argv\n"
+            "assert '--format' in sys.argv and 'json' in sys.argv, sys.argv\n"
+            "print(json.dumps({\n"
+            " 'schema':'coderisktools.vulnerability.report',\n"
+            " 'snapshot_id':'osv-partial-2026-07-23',\n"
+            " 'finding_count':1,\n"
+            " 'findings':[{'advisory_id':'BIT-demo-1','component_purl':'pkg:bitnami/demo@1.0.0','fingerprint':'sha256:' + '1'*64}],\n"
+            " 'summary':{'unknown':1}\n"
+            "}))\n"
+            "sys.exit(1)\n"
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            sbom = Path(directory) / "bom.json"
+            db = Path(directory) / "vulndb.sqlite"
+            sbom.write_text('{"bomFormat":"CycloneDX","components":[]}', encoding="utf-8")
+            db.write_bytes(b"sqlite placeholder")
+            result = SecretScannerAdapter([sys.executable, str(script)], DIGEST).scan_sbom(sbom, db, SHA)
+        self.assertEqual(result.status, "complete")
+        self.assertEqual(result.scanner_id, "coderisktools-vulnerability-scanner")
+        self.assertEqual(result.scanner_version, "secret-scanner 3.1.1")
+        self.assertEqual(result.findings[0]["advisory_id"], "BIT-demo-1")
+        self.assertEqual(result.warnings, ["vulnerability_database_partial"])
+
     def test_real_scanner_empty_directory_smoke(self):
         if shutil.which("secret-scanner") is None:
             self.skipTest("optional local secret-scanner CLI is not installed")

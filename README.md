@@ -57,6 +57,23 @@ PYTHONPATH=src python3 -m observatory self-scan \
 
 A clean self-scan returns exit `0`. Findings or scan errors return `2`; missing Git provenance, invalid configuration or scanner runtime errors return `3`. The output contains only provenance, status, counts, decisions, reason codes, errors and warnings.
 
+## Vulnerability SBOM scan
+
+Observatory can bind a local SBOM vulnerability scan to an exact target SHA by calling the OSS Scanner 3.1.1 `vuln scan --sbom` command against a local SQLite vulnerability database. This keeps dependency vulnerability evidence in the same review-gated flow while preserving the project boundary: the target repository is not executed and no package source is uploaded.
+
+```bash
+PYTHONPATH=src python3 -m observatory vuln-sbom \
+  --sbom bom.json \
+  --database ~/.local/share/coderisktools/vuln-db/osv-partial.sqlite \
+  --sha <full-40-character-target-sha> \
+  --ruleset-digest sha256:<64 lowercase hex characters> \
+  --scanner-command secret-scanner \
+  --output work/vulnerability-scan.json \
+  --json
+```
+
+Exit code `0` means the SBOM scan completed with no vulnerability findings. Exit code `2` means the scan completed with vulnerability findings or did not complete cleanly. Exit code `3` means Observatory rejected the input or scanner runtime contract. The starter `osv-partial` database is explicitly partial; absence of a match is not proof that a component is safe.
+
 ## CI scanner provenance
 
 CI checks out the scanner source at an exact commit, installs that pinned checkout, derives a canonical SHA-256 digest from the scanner's built-in declarative rules, and runs both the real benchmark and self-scan with that digest. The ruleset digest is therefore distinct from the scanner source/artifact SHA and is not a placeholder.

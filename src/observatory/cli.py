@@ -117,6 +117,14 @@ def build_parser():
     self_scan.add_argument("--ruleset-digest", required=True)
     self_scan.add_argument("--scanner-command", default="secret-scanner")
     self_scan.add_argument("--json", action="store_true")
+    vuln_sbom = subparsers.add_parser("vuln-sbom", help="Scan a local SBOM against a local CodeRiskTools vulnerability database")
+    vuln_sbom.add_argument("--sbom", type=Path, required=True)
+    vuln_sbom.add_argument("--database", type=Path, required=True)
+    vuln_sbom.add_argument("--sha", required=True)
+    vuln_sbom.add_argument("--ruleset-digest", required=True)
+    vuln_sbom.add_argument("--scanner-command", default="secret-scanner")
+    vuln_sbom.add_argument("--output", type=Path, required=True)
+    vuln_sbom.add_argument("--json", action="store_true")
     status = subparsers.add_parser("status", help="Build a privacy-safe static status page")
     status.add_argument("--output-dir", type=Path, required=True)
     status.add_argument("--reports-repo", type=Path, help="Read canonical public report artifacts from this repository")
@@ -334,6 +342,28 @@ def main(argv=None):
             return 3
         print(json.dumps(payload, ensure_ascii=False, sort_keys=True) if args.json else f"{payload['decision']}: {payload['finding_count']} findings")
         return 0 if payload["decision"] == "PUBLISH" else 2
+    if args.command == "vuln-sbom":
+        temporary = args.output.with_name(args.output.name + ".tmp")
+        try:
+            adapter = SecretScannerAdapter(shlex.split(args.scanner_command), args.ruleset_digest)
+            scan = adapter.scan_sbom(args.sbom, args.database, args.sha)
+            temporary.parent.mkdir(parents=True, exist_ok=True)
+            temporary.write_text(json.dumps(asdict(scan), ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+            temporary.replace(args.output)
+        except Exception as exc:
+            temporary.unlink(missing_ok=True)
+            if args.verbose:
+                print(f"observatory: vulnerability SBOM scan failed: {type(exc).__name__}", file=sys.stderr)
+            return 3
+        payload = {
+            "scan_status": scan.status,
+            "finding_count": len(scan.findings),
+            "errors": scan.errors,
+            "warnings": scan.warnings,
+            "output": str(args.output),
+        }
+        print(json.dumps(payload, ensure_ascii=False, sort_keys=True) if args.json else f"{scan.status}: {len(scan.findings)} vulnerability findings")
+        return 2 if scan.findings or scan.status != "complete" else 0
     if args.command == "status":
         try:
             counts = summarize_reports_repository(args.reports_repo) if args.reports_repo else {
