@@ -63,7 +63,9 @@ jobs:
           url="https://coderisktools.store/github-reports/?hub_workflow_smoke=${GITHUB_SHA}"
           html="$(curl --fail --silent --show-error --location --max-time 30 "$url")"
           grep -Fq 'PUBLIC PUBLICATION HUB' <<<"$html"
-          grep -Fq 'Open latest named review' <<<"$html"
+          grep -Fq 'Open the immutable report JSON' <<<"$html"
+          grep -Fq 'Popularity Cohort &amp; Scan Coverage' <<<"$html"
+          ! grep -Fq 'Vulnerability Summary &amp; Repository Ranking' <<<"$html"
           grep -Fq 'Open source repository' <<<"$html"
           ! grep -Eiq 'fatal error|critical error|parse error|database error' <<<"$html"
           echo 'WordPress public smoke: PASS'
