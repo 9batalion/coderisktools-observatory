@@ -13,9 +13,12 @@ import urllib.request
 
 START = "<!-- crt-publication-hub-start -->"
 END = "<!-- crt-publication-hub-end -->"
+RANKING_START = "<!-- crt-ranking-coverage-start -->"
+RANKING_END = "<!-- crt-ranking-coverage-end -->"
+LEGACY_RANKING_END = "<!-- legacy-evidence-ranking-removed-2026-07-27: replaced by single report-card table above -->"
 DEFAULT_LATEST_JSON = (
     "https://raw.githubusercontent.com/9batalion/"
-    "coderisktools-observatory-reports/main/public/weekly/latest.json"
+    "coderisktools-observatory-reports/main/public/rankings/latest.json"
 )
 
 
@@ -37,11 +40,53 @@ def get_latest_url(latest_json_url: str) -> str:
         raise RuntimeError("latest.json did not return an object")
     report_path = payload.get("report_path")
     week = payload.get("week")
-    if not isinstance(report_path, str) or not report_path.startswith("/weekly/"):
-        raise RuntimeError("latest.json has no safe weekly report_path")
+    if not isinstance(report_path, str) or not (report_path.startswith("/weekly/") or report_path.startswith("/rankings/")):
+        raise RuntimeError("latest.json has no safe report_path")
     if not isinstance(week, str) or not week or any(c in week for c in "/?#"):
         raise RuntimeError("latest.json has no safe week")
     return "https://9batalion.github.io/coderisktools-observatory-reports" + report_path
+
+
+def get_coverage_report(latest_url: str) -> dict:
+    report_url = latest_url.rstrip("/") + "/report.json"
+    status, payload = request(report_url)
+    if status != 200 or not isinstance(payload, dict):
+        raise RuntimeError("ranking report.json did not return an object")
+    if payload.get("schema") != "coderisktools.observatory.popularity-ranking.v1":
+        raise RuntimeError("latest report is not the verified popularity-ranking schema")
+    publication = payload.get("publication")
+    if publication != {
+        "firewall_results": "NOT_PUBLISHED",
+        "purpose": "POPULARITY_COHORT_SCAN_COVERAGE",
+        "raw_findings": "NOT_PUBLISHED",
+        "security_ranking": False,
+    }:
+        raise RuntimeError("ranking publication boundary is not the non-security coverage contract")
+    entries = payload.get("entries")
+    if not isinstance(entries, list) or len(entries) != 15:
+        raise RuntimeError("ranking report must contain exactly 15 entries")
+    return payload
+
+
+def render_coverage_block(report_url: str, report: dict) -> str:
+    rows = []
+    for entry in report["entries"]:
+        repo = html.escape(entry["repository"])
+        repo_url = html.escape(entry["repository_url"], quote=True)
+        sha = html.escape(entry["head_sha"][:12])
+        status = html.escape(entry["scan_status"])
+        stars = f'{entry["stars"]:,}'
+        rows.append(f'<tr><td>{entry["rank"]}</td><td><a href="{repo_url}">{repo}</a></td><td>{stars}</td><td><code>{sha}</code></td><td>{status}</td></tr>')
+    safe_report = html.escape(report_url, quote=True)
+    week = html.escape(report["week"])
+    return f'''{RANKING_START}
+<section class="crt-ranking-coverage" aria-labelledby="crt-ranking-coverage-title">
+<h2 id="crt-ranking-coverage-title">Popularity Cohort &amp; Scan Coverage</h2>
+<p><strong>2026-W30 coverage index:</strong> 15 public repositories selected by GitHub popularity. This is not a vulnerability ranking, security score, certification or endorsement.</p>
+<table><thead><tr><th>Popularity rank</th><th>Repository</th><th>Stars at snapshot</th><th>Reviewed commit</th><th>Scan status</th></tr></thead><tbody>{"".join(rows)}</tbody></table>
+<p>Raw findings, secrets, paths, scores and security conclusions are not published. <a href="{safe_report}">Open the immutable report JSON</a> and reproduce the source from the reports repository.</p>
+</section>
+{RANKING_END}'''
 
 
 def render_block(latest_url: str) -> str:
@@ -75,8 +120,23 @@ def main() -> int:
     if not isinstance(raw, str) or raw.count(START) != 1 or raw.count(END) != 1:
         raise SystemExit("page must contain exactly one publication-hub marker pair")
     latest_url = get_latest_url(args.latest_json_url)
+    report = get_coverage_report(latest_url)
     a, b = raw.index(START), raw.index(END) + len(END)
     candidate = raw[:a] + render_block(latest_url) + raw[b:]
+    coverage = render_coverage_block(latest_url, report)
+    if RANKING_START in candidate or RANKING_END in candidate:
+        if candidate.count(RANKING_START) != 1 or candidate.count(RANKING_END) != 1:
+            raise SystemExit("page must contain exactly one ranking coverage marker pair")
+        ra, rb = candidate.index(RANKING_START), candidate.index(RANKING_END) + len(RANKING_END)
+        candidate = candidate[:ra] + coverage + candidate[rb:]
+    elif LEGACY_RANKING_END in candidate:
+        heading = "<h2>Vulnerability Summary &amp; Repository Ranking</h2>"
+        ra, rb = candidate.find(heading), candidate.find(LEGACY_RANKING_END)
+        if ra < 0 or rb <= ra:
+            raise SystemExit("legacy ranking boundary is incomplete")
+        candidate = candidate[:ra] + coverage + "\n\n" + candidate[rb:]
+    else:
+        raise SystemExit("page has neither ranking coverage markers nor legacy ranking boundary")
     print(json.dumps({"page_id": page.get("id"), "latest_url": latest_url, "candidate_chars": len(candidate), "dry_run": args.dry_run}, sort_keys=True))
     if raw == candidate:
         print(json.dumps({"readback": "UNCHANGED", "write_status": None, "page_id": page.get("id")}, sort_keys=True))
