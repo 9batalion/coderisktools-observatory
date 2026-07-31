@@ -94,9 +94,9 @@ def render_block(latest_url: str) -> str:
     return f'''{START}
 <section class="crt-publication-hub" aria-labelledby="crt-publication-hub-title" style="margin:30px 0;padding:24px;background:#0b1118;border:1px solid #294158;border-radius:14px;color:#dbe7f3">
 <p style="margin:0 0 8px;color:#7dd3fc;font:700 12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.08em;text-transform:uppercase">PUBLIC PUBLICATION HUB</p>
-<h3 id="crt-publication-hub-title" style="margin:0 0 10px;color:#f8fafc">Read the latest review and reproduce the source</h3>
+<h3 id="crt-publication-hub-title" style="margin:0 0 10px;color:#f8fafc">Read the latest coverage index and reproduce the source</h3>
 <p style="margin:0 0 16px;line-height:1.65">The WordPress page is the editorial entry point. The immutable report bytes, weekly index and source history live in the public reports repository and are published through its reviewed workflow.</p>
-<div style="display:flex;flex-wrap:wrap;gap:10px;margin:0 0 16px"><a href="{safe_url}" style="display:inline-block;padding:11px 15px;border-radius:8px;background:#f2c98c;color:#111827;font-weight:700">Open latest named review</a><a href="https://github.com/9batalion/coderisktools-observatory-reports" style="display:inline-block;padding:11px 15px;border-radius:8px;background:#1a2634;border:1px solid #58708a;color:#f8fafc;font-weight:700">Open source repository</a></div>
+<div style="display:flex;flex-wrap:wrap;gap:10px;margin:0 0 16px"><a href="{safe_url}" style="display:inline-block;padding:11px 15px;border-radius:8px;background:#f2c98c;color:#111827;font-weight:700">Open latest coverage index</a><a href="https://github.com/9batalion/coderisktools-observatory-reports" style="display:inline-block;padding:11px 15px;border-radius:8px;background:#1a2634;border:1px solid #58708a;color:#f8fafc;font-weight:700">Open source repository</a></div>
 <ul style="margin:0;padding-left:20px;line-height:1.7"><li>public artifacts are reviewed through pull requests;</li><li>exact source commits, manifests and checksums remain reproducible;</li><li>raw findings, secrets and private operator evidence are not published.</li></ul>
 </section>
 {END}'''
@@ -117,12 +117,23 @@ def main() -> int:
     page_url = f"{api_base}/wp/v2/pages/{urllib.parse.quote(str(args.page_id))}?context=edit"
     _, page = request(page_url, auth=(username, auth_value))
     raw = page.get("content", {}).get("raw")
-    if not isinstance(raw, str) or raw.count(START) != 1 or raw.count(END) != 1:
-        raise SystemExit("page must contain exactly one publication-hub marker pair")
+    if not isinstance(raw, str):
+        raise SystemExit("page content raw is missing")
     latest_url = get_latest_url(args.latest_json_url)
     report = get_coverage_report(latest_url)
-    a, b = raw.index(START), raw.index(END) + len(END)
-    candidate = raw[:a] + render_block(latest_url) + raw[b:]
+    hub = render_block(latest_url)
+    if raw.count(START) == 1 and raw.count(END) == 1:
+        a, b = raw.index(START), raw.index(END) + len(END)
+        candidate = raw[:a] + hub + raw[b:]
+    elif raw.count('<section class="crt-publication-hub"') == 1 and raw.count('</section>') >= 1:
+        a = raw.index('<section class="crt-publication-hub"')
+        b = raw.index('</section>', a) + len('</section>')
+        candidate = raw[:a] + hub + raw[b:]
+    elif raw.count(RANKING_START) == 1 and raw.count(RANKING_END) == 1:
+        a = raw.index(RANKING_START)
+        candidate = raw[:a] + hub + "\n\n" + raw[a:]
+    else:
+        raise SystemExit("page has no safe publication-hub boundary")
     coverage = render_coverage_block(latest_url, report)
     if RANKING_START in candidate or RANKING_END in candidate:
         if candidate.count(RANKING_START) != 1 or candidate.count(RANKING_END) != 1:
