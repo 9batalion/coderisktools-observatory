@@ -50,7 +50,7 @@ jobs:
           page_id='${{ inputs.page_id }}'
           latest_json_url='${{ inputs.latest_json_url }}'
           if [ -z "$page_id" ]; then page_id=1217; fi
-          if [ -z "$latest_json_url" ]; then latest_json_url='https://raw.githubusercontent.com/9batalion/coderisktools-observatory-reports/main/public/weekly/latest.json'; fi
+          if [ -z "$latest_json_url" ]; then latest_json_url='https://raw.githubusercontent.com/9batalion/coderisktools-observatory-reports/main/public/rankings/latest.json'; fi
           args=(--page-id "$page_id" --latest-json-url "$latest_json_url")
           if [ "$GITHUB_EVENT_NAME" != 'schedule' ] && [ '${{ inputs.dry_run }}' = 'true' ]; then
             args+=(--dry-run)
@@ -63,6 +63,7 @@ jobs:
           url="https://coderisktools.store/github-reports/?hub_workflow_smoke=${GITHUB_SHA}"
           html="$(curl --fail --silent --show-error --location --max-time 30 "$url")"
           grep -Fq 'PUBLIC PUBLICATION HUB' <<<"$html"
+          grep -Fq 'Open latest coverage index' <<<"$html"
           grep -Fq 'Open the immutable report JSON' <<<"$html"
           grep -Fq 'Popularity Cohort &amp; Scan Coverage' <<<"$html"
           ! grep -Fq 'Vulnerability Summary &amp; Repository Ranking' <<<"$html"
