@@ -68,6 +68,13 @@ def get_coverage_report(latest_url: str) -> dict:
     return payload
 
 
+def format_observation_counts(entry: dict) -> tuple[str, str, str, str, str]:
+    counts = entry.get("observation_counts")
+    if counts is None:
+        return ("—", "—", "—", "—", "—")
+    return tuple(str(counts[key]) for key in ("critical", "high", "medium", "low", "total"))
+
+
 def render_coverage_block(report_url: str, report: dict) -> str:
     rows = []
     for entry in report["entries"]:
@@ -76,15 +83,16 @@ def render_coverage_block(report_url: str, report: dict) -> str:
         sha = html.escape(entry["head_sha"][:12])
         status = html.escape(entry["scan_status"])
         stars = f'{entry["stars"]:,}'
-        rows.append(f'<tr><td>{entry["rank"]}</td><td><a href="{repo_url}">{repo}</a></td><td>{stars}</td><td><code>{sha}</code></td><td>{status}</td></tr>')
+        critical, high, medium, low, total = format_observation_counts(entry)
+        rows.append(f'<tr><td>{entry["rank"]}</td><td><a href="{repo_url}">{repo}</a></td><td>{stars}</td><td><code>{sha}</code></td><td>{status}</td><td>{critical}</td><td>{high}</td><td>{medium}</td><td>{low}</td><td>{total}</td></tr>')
     safe_report = html.escape(report_url, quote=True)
     week = html.escape(report["week"])
     return f'''{RANKING_START}
 <section class="crt-ranking-coverage" aria-labelledby="crt-ranking-coverage-title">
 <h2 id="crt-ranking-coverage-title">Popularity Cohort &amp; Scan Coverage</h2>
 <p><strong>2026-W30 coverage index:</strong> 15 public repositories selected by GitHub popularity. This is not a vulnerability ranking, security score, certification or endorsement.</p>
-<table><thead><tr><th>Popularity rank</th><th>Repository</th><th>Stars at snapshot</th><th>Reviewed commit</th><th>Scan status</th></tr></thead><tbody>{"".join(rows)}</tbody></table>
-<p>Raw findings, secrets, paths, scores and security conclusions are not published. <a href="{safe_report}">Open the immutable report JSON</a> and reproduce the source from the reports repository.</p>
+<table><thead><tr><th>Popularity rank</th><th>Repository</th><th>Stars at snapshot</th><th>Reviewed commit</th><th>Scan status</th><th>Critical observations</th><th>High observations</th><th>Medium observations</th><th>Low observations</th><th>Total observations</th></tr></thead><tbody>{"".join(rows)}</tbody></table>
+<p>Severity counts are rule observations in the tested scope, not confirmed vulnerabilities. An em dash means no complete result was available. Raw findings, secrets, paths, scores and security conclusions are not published. <a href="{safe_report}">Open the immutable report JSON</a> and reproduce the source from the reports repository.</p>
 </section>
 {RANKING_END}'''
 
