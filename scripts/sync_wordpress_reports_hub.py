@@ -16,6 +16,23 @@ END = "<!-- crt-publication-hub-end -->"
 RANKING_START = "<!-- crt-ranking-coverage-start -->"
 RANKING_END = "<!-- crt-ranking-coverage-end -->"
 LEGACY_RANKING_END = "<!-- legacy-evidence-ranking-removed-2026-07-27: replaced by single report-card table above -->"
+NEXT_COHORT = [
+    ("moby/moby", 71966),
+    ("chrislgarry/Apollo-11", 71803),
+    ("NationalSecurityAgency/ghidra", 71799),
+    ("juliangarnier/anime", 71747),
+    ("protocolbuffers/protobuf", 71682),
+    ("ComposioHQ/awesome-claude-skills", 71671),
+    ("OpenBB-finance/OpenBB", 71339),
+    ("nektos/act", 71310),
+    ("binary-husky/gpt_academic", 71179),
+    ("toeverything/AFFiNE", 71125),
+    ("microsoft/ai-agents-for-beginners", 71100),
+    ("Leonxlnx/taste-skill", 70923),
+    ("datawhalechina/hello-agents", 70426),
+    ("swiftlang/swift", 70212),
+    ("ansible/ansible", 70201),
+]
 DEFAULT_LATEST_JSON = (
     "https://raw.githubusercontent.com/9batalion/"
     "coderisktools-observatory-reports/main/public/rankings/latest.json"
@@ -93,6 +110,13 @@ def render_coverage_block(report_url: str, report: dict) -> str:
 <p><strong>2026-W30 coverage index:</strong> 15 public repositories selected by GitHub popularity. This is not a vulnerability ranking, security score, certification or endorsement.</p>
 <table><thead><tr><th>Popularity rank</th><th>Repository</th><th>Stars at snapshot</th><th>Reviewed commit</th><th>Scan status</th><th>Critical observations</th><th>High observations</th><th>Medium observations</th><th>Low observations</th><th>Total observations</th></tr></thead><tbody>{"".join(rows)}</tbody></table>
 <p>Severity counts are rule observations in the tested scope, not confirmed vulnerabilities. An em dash means no complete result was available. Raw findings, secrets, paths, scores and security conclusions are not published. <a href="{safe_report}">Open the immutable report JSON</a> and reproduce the source from the reports repository.</p>
+<h3>Scanner i zakres badania</h3>
+<p><strong>Główny skaner:</strong> CodeRiskTools Scanner <code>3.1.3</code>, z repozytorium <a href="https://github.com/9batalion/coderisktools-scanner">9batalion/coderisktools-scanner</a>, przypięty do exact source commit <code>c1698b297e6200313276c8c2ef8e00a40ee9aa42</code>. Ten sam commit i wersja zostały użyte w prywatnych skanach 15 repozytoriów.</p>
+<p><strong>Narzędzia pomocnicze:</strong> Git do checkoutów i weryfikacji exact SHA oraz Python do bezpiecznej orkiestracji, shardowania, agregacji i checksumów. Nie używano Trivy, Gitleaks, OSV-Scanner ani innych dodatkowych silników. Kod badanych repozytoriów nie był uruchamiany; repozytoria traktowano jako dane.</p>
+<h3>Proponowany kolejny cohort — 15 repozytoriów</h3>
+<p>Wstępny wybór według aktualnej liczby GitHub stars, po obecnym cohortcie. To lista do audytu, nie ranking bezpieczeństwa ani rekomendacja.</p>
+<ol>{''.join(f'<li><a href="https://github.com/{html.escape(repo, quote=True)}">{html.escape(repo)}</a> — {stars:,} stars</li>' for repo, stars in NEXT_COHORT)}</ol>
+<p>Badanie kolejnego cohortu rozpocznie się od readbacku repozytorium, default branch, exact SHA, licencji i kompletności checkoutu. Dopiero po tej kontroli zostaną uruchomione ograniczone skany tego samego przypiętego skanera.</p>
 </section>
 {RANKING_END}'''
 
