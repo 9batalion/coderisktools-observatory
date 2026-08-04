@@ -17,22 +17,24 @@ RANKING_START = "<!-- crt-ranking-coverage-start -->"
 RANKING_END = "<!-- crt-ranking-coverage-end -->"
 LEGACY_RANKING_END = "<!-- legacy-evidence-ranking-removed-2026-07-27: replaced by single report-card table above -->"
 NEXT_COHORT = [
-    ("moby/moby", 71966),
-    ("chrislgarry/Apollo-11", 71803),
-    ("NationalSecurityAgency/ghidra", 71799),
-    ("juliangarnier/anime", 71747),
-    ("protocolbuffers/protobuf", 71682),
-    ("ComposioHQ/awesome-claude-skills", 71671),
-    ("OpenBB-finance/OpenBB", 71339),
-    ("nektos/act", 71310),
-    ("binary-husky/gpt_academic", 71179),
-    ("toeverything/AFFiNE", 71125),
-    ("microsoft/ai-agents-for-beginners", 71100),
-    ("Leonxlnx/taste-skill", 70923),
-    ("datawhalechina/hello-agents", 70426),
-    ("swiftlang/swift", 70212),
-    ("ansible/ansible", 70201),
+    ("moby/moby", 71966, "partial"),
+    ("chrislgarry/Apollo-11", 71803, "complete"),
+    ("NationalSecurityAgency/ghidra", 71799, "partial"),
+    ("juliangarnier/anime", 71747, "not_started"),
+    ("protocolbuffers/protobuf", 71682, "not_started"),
+    ("ComposioHQ/awesome-claude-skills", 71671, "not_started"),
+    ("OpenBB-finance/OpenBB", 71339, "not_started"),
+    ("nektos/act", 71310, "not_started"),
+    ("binary-husky/gpt_academic", 71179, "not_started"),
+    ("toeverything/AFFiNE", 71125, "not_started"),
+    ("microsoft/ai-agents-for-beginners", 71100, "not_started"),
+    ("Leonxlnx/taste-skill", 70923, "not_started"),
+    ("datawhalechina/hello-agents", 70426, "not_started"),
+    ("swiftlang/swift", 70212, "not_started"),
+    ("ansible/ansible", 70201, "not_started"),
 ]
+REPORTS_PER_PAGE = 50
+STATUS_LABELS = {"complete": "complete", "partial": "partial", "not_started": "nie rozpoczęto"}
 DEFAULT_LATEST_JSON = (
     "https://raw.githubusercontent.com/9batalion/"
     "coderisktools-observatory-reports/main/public/rankings/latest.json"
@@ -113,10 +115,10 @@ def render_coverage_block(report_url: str, report: dict) -> str:
 <h3>Scanner i zakres badania</h3>
 <p><strong>Główny skaner:</strong> CodeRiskTools Scanner <code>3.1.3</code>, z repozytorium <a href="https://github.com/9batalion/coderisktools-scanner">9batalion/coderisktools-scanner</a>, przypięty do exact source commit <code>c1698b297e6200313276c8c2ef8e00a40ee9aa42</code>. Ten sam commit i wersja zostały użyte w prywatnych skanach 15 repozytoriów.</p>
 <p><strong>Narzędzia pomocnicze:</strong> Git do checkoutów i weryfikacji exact SHA oraz Python do bezpiecznej orkiestracji, shardowania, agregacji i checksumów. Nie używano Trivy, Gitleaks, OSV-Scanner ani innych dodatkowych silników. Kod badanych repozytoriów nie był uruchamiany; repozytoria traktowano jako dane.</p>
-<h3>Proponowany kolejny cohort — 15 repozytoriów</h3>
-<p>Wstępny wybór według aktualnej liczby GitHub stars, po obecnym cohortcie. To lista do audytu, nie ranking bezpieczeństwa ani rekomendacja.</p>
-<ol>{''.join(f'<li><a href="https://github.com/{html.escape(repo, quote=True)}">{html.escape(repo)}</a> — {stars:,} stars</li>' for repo, stars in NEXT_COHORT)}</ol>
-<p>Badanie kolejnego cohortu rozpocznie się od readbacku repozytorium, default branch, exact SHA, licencji i kompletności checkoutu. Dopiero po tej kontroli zostaną uruchomione ograniczone skany tego samego przypiętego skanera.</p>
+<h3>Raporty 16–30 — kontynuacja</h3>
+<p>Numeracja jest ciągła po pierwszych 15 raportach. Jedna strona zawiera maksymalnie {REPORTS_PER_PAGE} raportów; następne numery zostaną umieszczone na kolejnej stronie. Statusy poniżej odzwierciedlają faktyczny stan badania.</p>
+<ol start="16">{''.join(f'<li><a href="https://github.com/{html.escape(repo, quote=True)}">{html.escape(repo)}</a> — {stars:,} stars — <strong>{html.escape(STATUS_LABELS[status])}</strong></li>' for repo, stars, status in NEXT_COHORT[:REPORTS_PER_PAGE-15])}</ol>
+<p>Raport 16–30 jest kontynuacją poprzedniego cohortu, nie nowym rankingiem bezpieczeństwa. Badanie każdego repozytorium rozpoczyna się od readbacku default branch, exact SHA, licencji i kompletności checkoutu.</p>
 </section>
 {RANKING_END}'''
 
