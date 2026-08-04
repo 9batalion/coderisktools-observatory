@@ -34,7 +34,24 @@ NEXT_COHORT = [
     ("ansible/ansible", 70201, "not_started"),
 ]
 REPORTS_PER_PAGE = 50
-STATUS_LABELS = {"complete": "complete", "partial": "partial", "not_started": "nie rozpoczęto"}
+STATUS_LABELS = {"complete": "COMPLETE", "partial": "PARTIAL", "not_started": "NOT STARTED"}
+NEXT_COHORT_SHA = {
+    "moby/moby": "6719bc3c8d675b3ac60a2fd78c630a066177e20d",
+    "chrislgarry/Apollo-11": "911e5c0283c629c50cb97666f34065e8c07d71a5",
+    "NationalSecurityAgency/ghidra": "264130231b130b5fd8fd4ac85f1e7f5a8d1af252",
+    "juliangarnier/anime": "2c9cf8ea00329f6768c7d7902252ed977d75ce42",
+    "protocolbuffers/protobuf": "0e436a47e854982213b4c9a72ca7f48c29bd7b88",
+    "ComposioHQ/awesome-claude-skills": "be2a406907dbc61b73e6827ded415c96139d13a2",
+    "OpenBB-finance/OpenBB": "3e071fcc2cd9f891cac6040ae60296dba76dab46",
+    "nektos/act": "4f411281417e88660bea1c1a1749aa71ae0bd60f",
+    "binary-husky/gpt_academic": "d6bde0fa54373309bd05823a49bda8da019d2c77",
+    "toeverything/AFFiNE": "fdfb6df8260577efd03ca3679e3310702a8f69e0",
+    "microsoft/ai-agents-for-beginners": "15ad10ca60577b75199c1ba828887ab7e66bac87",
+    "Leonxlnx/taste-skill": "e988add20dab0fa97d7a76781c48961c8184288e",
+    "datawhalechina/hello-agents": "f8227af2efc4a244763d379d78d9e76fc7b35943",
+    "swiftlang/swift": "4ef9a5286c51308858f6836cda1514edc0921358",
+    "ansible/ansible": "2d8c74aa7ae5726bd47da230ff3cf45821c168c8",
+}
 DEFAULT_LATEST_JSON = (
     "https://raw.githubusercontent.com/9batalion/"
     "coderisktools-observatory-reports/main/public/rankings/latest.json"
@@ -95,30 +112,53 @@ def format_observation_counts(entry: dict) -> tuple[str, str, str, str, str]:
 
 
 def render_coverage_block(report_url: str, report: dict) -> str:
-    rows = []
+    combined = []
     for entry in report["entries"]:
+        critical, high, medium, low, total = format_observation_counts(entry)
+        combined.append({
+            "number": entry["rank"],
+            "repository": entry["repository"],
+            "repository_url": entry["repository_url"],
+            "stars": entry["stars"],
+            "head_sha": entry["head_sha"],
+            "status": entry["scan_status"].upper().replace("_", " "),
+            "counts": (critical, high, medium, low, total),
+        })
+    for number, (repository, stars, status) in enumerate(NEXT_COHORT, start=16):
+        combined.append({
+            "number": number,
+            "repository": repository,
+            "repository_url": f"https://github.com/{repository}",
+            "stars": stars,
+            "head_sha": NEXT_COHORT_SHA[repository],
+            "status": STATUS_LABELS[status],
+            "counts": ("—", "—", "—", "—", "—"),
+        })
+    if len(combined) > REPORTS_PER_PAGE:
+        raise RuntimeError(f"report page exceeds {REPORTS_PER_PAGE} rows")
+    if [entry["number"] for entry in combined] != list(range(1, len(combined) + 1)):
+        raise RuntimeError("report numbering must be continuous")
+    rows = []
+    for entry in combined:
         repo = html.escape(entry["repository"])
         repo_url = html.escape(entry["repository_url"], quote=True)
         sha = html.escape(entry["head_sha"][:12])
-        status = html.escape(entry["scan_status"])
+        status = html.escape(entry["status"])
         stars = f'{entry["stars"]:,}'
-        critical, high, medium, low, total = format_observation_counts(entry)
-        rows.append(f'<tr><td>{entry["rank"]}</td><td><a href="{repo_url}">{repo}</a></td><td>{stars}</td><td><code>{sha}</code></td><td>{status}</td><td>{critical}</td><td>{high}</td><td>{medium}</td><td>{low}</td><td>{total}</td></tr>')
+        critical, high, medium, low, total = entry["counts"]
+        rows.append(f'<tr><td>{entry["number"]}</td><td><a href="{repo_url}">{repo}</a></td><td>{stars}</td><td><code>{sha}</code></td><td>{status}</td><td>{critical}</td><td>{high}</td><td>{medium}</td><td>{low}</td><td>{total}</td></tr>')
     safe_report = html.escape(report_url, quote=True)
-    week = html.escape(report["week"])
     return f'''{RANKING_START}
 <section class="crt-ranking-coverage" aria-labelledby="crt-ranking-coverage-title">
-<h2 id="crt-ranking-coverage-title">Popularity Cohort &amp; Scan Coverage</h2>
-<p><strong>2026-W30 coverage index:</strong> 15 public repositories selected by GitHub popularity. This is not a vulnerability ranking, security score, certification or endorsement.</p>
-<table><thead><tr><th>Popularity rank</th><th>Repository</th><th>Stars at snapshot</th><th>Reviewed commit</th><th>Scan status</th><th>Critical observations</th><th>High observations</th><th>Medium observations</th><th>Low observations</th><th>Total observations</th></tr></thead><tbody>{"".join(rows)}</tbody></table>
-<p>Severity counts are rule observations in the tested scope, not confirmed vulnerabilities. An em dash means no complete result was available. Raw findings, secrets, paths, scores and security conclusions are not published. <a href="{safe_report}">Open the immutable report JSON</a> and reproduce the source from the reports repository.</p>
-<h3>Scanner i zakres badania</h3>
-<p><strong>Główny skaner:</strong> CodeRiskTools Scanner <code>3.1.3</code>, z repozytorium <a href="https://github.com/9batalion/coderisktools-scanner">9batalion/coderisktools-scanner</a>, przypięty do exact source commit <code>c1698b297e6200313276c8c2ef8e00a40ee9aa42</code>. Ten sam commit i wersja zostały użyte w prywatnych skanach 15 repozytoriów.</p>
-<p><strong>Narzędzia pomocnicze:</strong> Git do checkoutów i weryfikacji exact SHA oraz Python do bezpiecznej orkiestracji, shardowania, agregacji i checksumów. Nie używano Trivy, Gitleaks, OSV-Scanner ani innych dodatkowych silników. Kod badanych repozytoriów nie był uruchamiany; repozytoria traktowano jako dane.</p>
-<h3>Raporty 16–30 — kontynuacja</h3>
-<p>Numeracja jest ciągła po pierwszych 15 raportach. Jedna strona zawiera maksymalnie {REPORTS_PER_PAGE} raportów; następne numery zostaną umieszczone na kolejnej stronie. Statusy poniżej odzwierciedlają faktyczny stan badania.</p>
-<ol start="16">{''.join(f'<li><a href="https://github.com/{html.escape(repo, quote=True)}">{html.escape(repo)}</a> — {stars:,} stars — <strong>{html.escape(STATUS_LABELS[status])}</strong></li>' for repo, stars, status in NEXT_COHORT[:REPORTS_PER_PAGE-15])}</ol>
-<p>Raport 16–30 jest kontynuacją poprzedniego cohortu, nie nowym rankingiem bezpieczeństwa. Badanie każdego repozytorium rozpoczyna się od readbacku default branch, exact SHA, licencji i kompletności checkoutu.</p>
+<h2 id="crt-ranking-coverage-title">Repository Reports &amp; Scan Coverage</h2>
+<p><strong>Reports 1–30:</strong> one continuous register of public repositories selected by GitHub popularity. This is not a vulnerability ranking, security score, certification, recommendation, or endorsement.</p>
+<div class="crt-report-table-scroll" style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table><thead><tr><th>Report</th><th>Repository</th><th>Stars at snapshot</th><th>Reviewed commit</th><th>Scan status</th><th>Critical observations</th><th>High observations</th><th>Medium observations</th><th>Low observations</th><th>Total observations</th></tr></thead><tbody>{"".join(rows)}</tbody></table></div>
+<p>Page 1 contains reports 1–30. A report page is limited to {REPORTS_PER_PAGE} rows; reports 51 and later will continue on the next page. An em dash means that aggregate counts have not been published in the immutable report yet; it never means zero.</p>
+<p>Severity counts are scanner-rule observations in the tested scope, not confirmed vulnerabilities. Raw findings, secret values, paths, snippets, scores, and security conclusions are not published. <a href="{safe_report}">Open the immutable coverage report JSON</a>.</p>
+<h3>Scanner and scan scope</h3>
+<p><strong>Primary scanner:</strong> CodeRiskTools Scanner <code>3.1.3</code> from <a href="https://github.com/9batalion/coderisktools-scanner">9batalion/coderisktools-scanner</a>, pinned to exact source commit <code>c1698b297e6200313276c8c2ef8e00a40ee9aa42</code>.</p>
+<p><strong>Supporting tools:</strong> Git for exact-SHA checkout and provenance; Python for bounded orchestration, sharding, aggregation, deduplication checks, and checksums. Trivy, Gitleaks, OSV-Scanner, and other scanner engines were not used. Target repository code was never executed; repositories were treated as data.</p>
+<p>Reports 16–30 continue the same register after reports 1–15. Each repository begins with default-branch, exact-SHA, license, and checkout-completeness readback. A status of <strong>NOT STARTED</strong> is not a clean result.</p>
 </section>
 {RANKING_END}'''
 
